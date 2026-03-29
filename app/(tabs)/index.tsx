@@ -36,6 +36,10 @@ export default function IndexScreen() {
     setStartDate('');
   };
 
+  const removeTrip = (id: number) => {
+  setTrips((prev) => prev.filter((trip) => trip.id !== id));
+};
+
   return (
     <ScrollView contentContainerStyle={{ padding: 20 }}>
       <Text style={{ fontSize: 24, marginBottom: 12 }}>My Trips</Text>
@@ -77,6 +81,7 @@ export default function IndexScreen() {
             <Text style={{ fontSize: 18 }}>{trip.title}</Text>
             <Text>{trip.destination}</Text>
             <Text>{trip.startDate}</Text>
+            <Button title="Remove" onPress={() => removeTrip(trip.id)} />
           </View>
         ))}
       </View>
