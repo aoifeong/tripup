@@ -1,3 +1,4 @@
+import TripCard from '@/components/TripCard';
 import { useState } from 'react';
 import { Button, ScrollView, Text, TextInput, View } from 'react-native';
 
@@ -18,10 +19,21 @@ export default function IndexScreen() {
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
   const [startDate, setStartDate] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
 
-  const addTrip = () => {
-    if (!title.trim()) return;
+  const saveTrip = () => {
+  if (!title.trim()) return;
 
+  if (editingId) {
+    setTrips((prev) =>
+      prev.map((trip) =>
+        trip.id === editingId
+          ? { ...trip, title, destination, startDate }
+          : trip
+      )
+    );
+    setEditingId(null);
+  } else {
     const newTrip = {
       id: Date.now(),
       title,
@@ -30,11 +42,12 @@ export default function IndexScreen() {
     };
 
     setTrips((prev) => [...prev, newTrip]);
+  }
 
-    setTitle('');
-    setDestination('');
-    setStartDate('');
-  };
+  setTitle('');
+  setDestination('');
+  setStartDate('');
+};
 
   const removeTrip = (id: number) => {
   setTrips((prev) => prev.filter((trip) => trip.id !== id));
@@ -65,25 +78,25 @@ export default function IndexScreen() {
         style={{ borderWidth: 1, marginBottom: 12, padding: 10, borderRadius: 8 }}
       />
 
-      <Button title="Add Trip" onPress={addTrip} />
+      <Button
+  title={editingId ? "Save Changes" : "Add Trip"}
+  onPress={saveTrip}
+/>
 
       <View style={{ marginTop: 20 }}>
         {trips.map((trip) => (
-          <View
-            key={trip.id}
-            style={{
-              padding: 12,
-              borderWidth: 1,
-              marginBottom: 10,
-              borderRadius: 8,
-            }}
-          >
-            <Text style={{ fontSize: 18 }}>{trip.title}</Text>
-            <Text>{trip.destination}</Text>
-            <Text>{trip.startDate}</Text>
-            <Button title="Remove" onPress={() => removeTrip(trip.id)} />
-          </View>
-        ))}
+  <TripCard
+    key={trip.id}
+    trip={trip}
+    onRemove={removeTrip}
+    onEdit={(trip) => {
+      setEditingId(trip.id);
+      setTitle(trip.title);
+      setDestination(trip.destination);
+      setStartDate(trip.startDate);
+    }}
+  />
+))}
       </View>
     </ScrollView>
   );
