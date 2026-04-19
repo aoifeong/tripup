@@ -1,40 +1,107 @@
-import { Trip } from '@/app/_layout';
+import { colors, radius, spacing } from '@/constants/theme';
 import { useRouter } from 'expo-router';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+// ✅ ADD THIS at the top
+import { Trip } from '@/app/_layout';
 
-type Props = {
+interface TripCardProps {
   trip: Trip;
-};
+}
 
-export default function TripCard({ trip }: Props) {
+export default function TripCard({ trip }: TripCardProps) {
   const router = useRouter();
 
-  const openDetails = () => {
-    router.push({
-      pathname: '/trip/[id]',
-      params: { id: trip.id.toString() },
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
     });
   };
 
   return (
     <Pressable
-      accessibilityLabel={`${trip.title}, ${trip.destination}, view details`}
+      onPress={() =>
+        router.push({
+          pathname: '/trip/[id]',
+          params: { id: trip.id },
+        })
+      }
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.8 : 1,
+      })}
       accessibilityRole="button"
-      onPress={openDetails}
-      style={({ pressed }) => [
-        {
-          padding: 12,
-          borderWidth: 1,
-          marginBottom: 10,
-          borderRadius: 8,
-          backgroundColor: '#fff',
-        },
-        pressed ? { opacity: 0.85 } : null,
-      ]}
+      accessibilityLabel={`${trip.title} in ${trip.destination}`}
     >
-      <Text style={{ fontSize: 18 }}>{trip.title}</Text>
-      <Text>{trip.destination}</Text>
-      <Text>{trip.startDate}</Text>
+      <View
+        style={{
+          backgroundColor: colors.card,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: spacing.md,
+        }}
+      >
+        {/* Destination */}
+        <Text style={{
+          fontSize: 12,
+          fontWeight: '600',
+          color: colors.muted,
+          marginBottom: spacing.xs,
+          textTransform: 'uppercase',
+        }}>
+          {trip.destination}
+        </Text>
+
+        {/* Title */}
+        <Text style={{
+          fontSize: 18,
+          fontWeight: '700',
+          color: colors.text,
+          marginBottom: spacing.sm,
+          lineHeight: 24,
+        }}
+        numberOfLines={2}
+        >
+          {trip.title}
+        </Text>
+
+        {/* Date Range */}
+        <Text style={{
+          fontSize: 13,
+          color: colors.muted,
+          marginBottom: spacing.md,
+        }}>
+          {formatDate(trip.startDate)}{trip.endDate ? ` - ${formatDate(trip.endDate)}` : ''}
+        </Text>
+
+        {/* View Trip Button */}
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: '/trip/[id]',
+              params: { id: trip.id },
+            })
+          }
+          style={({ pressed }) => ({
+            backgroundColor: colors.primary,
+            paddingVertical: 8,
+            borderRadius: radius.md,
+            alignItems: 'center',
+            opacity: pressed ? 0.9 : 1,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${trip.title}`}
+        >
+          <Text style={{
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          }}>
+            View Trip
+          </Text>
+        </Pressable>
+      </View>
     </Pressable>
   );
 }

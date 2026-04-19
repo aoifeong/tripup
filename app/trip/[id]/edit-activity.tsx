@@ -1,9 +1,9 @@
 import { colors, radius, spacing } from '@/constants/theme';
 import { db } from '@/db/client';
-import { tripsTable } from '@/db/schema';
+import { activitiesTable } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useContext, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,49 +12,58 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Trip, TripContext } from '../../_layout';
 
-export default function EditTrip() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function EditActivity() {
+  const { id, activityId } = useLocalSearchParams<{
+    id: string;
+    activityId: string;
+  }>();
+
   const router = useRouter();
-  const context = useContext(TripContext);
 
-  if (!context) return null;
-
-  const { trips, setTrips } = context;
-
-  const trip = trips.find((t: Trip) => t.id === Number(id));
-
-  if (!trip) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: colors.background,
-        }}
-      >
-        <Text style={{ color: colors.text, fontSize: 16 }}>Trip not found</Text>
-      </View>
-    );
-  }
-
-  const [title, setTitle] = useState(trip.title);
-  const [destination, setDestination] = useState(trip.destination);
-  const [startDate, setStartDate] = useState(trip.startDate);
-  const [endDate, setEndDate] = useState(trip.endDate || '');
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [duration, setDuration] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadActivity = async () => {
+      try {
+        const result = await db
+          .select()
+          .from(activitiesTable)
+          .where(eq(activitiesTable.id, Number(activityId)));
+
+        if (result.length > 0) {
+          const activity = result[0];
+          setTitle(activity.title);
+          setDate(activity.date);
+          setDuration(String(activity.duration));
+        } else {
+          setError('Activity not found');
+        }
+      } catch (err) {
+        setError('Failed to load activity');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadActivity();
+  }, [activityId]);
 
   const validateForm = (): string | null => {
-    if (!title.trim()) return 'Trip title is required';
-    if (!destination.trim()) return 'Destination is required';
-    if (!startDate.trim()) return 'Start date is required';
+    if (!title.trim()) return 'Activity title is required';
+    if (!date.trim()) return 'Date is required';
+    if (!duration.trim()) return 'Duration is required';
+    if (isNaN(Number(duration))) return 'Duration must be a number';
+    if (Number(duration) <= 0) return 'Duration must be greater than 0';
     return null;
   };
 
-  const saveChanges = async () => {
+  const updateActivity = async () => {
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
@@ -66,28 +75,42 @@ export default function EditTrip() {
 
     try {
       await db
-        .update(tripsTable)
+        .update(activitiesTable)
         .set({
           title: title.trim(),
-          destination: destination.trim(),
-          startDate: startDate.trim(),
-          endDate: endDate.trim() || null,
+          date: date.trim(),
+          duration: Number(duration),
         })
-        .where(eq(tripsTable.id, Number(id)));
+        .where(eq(activitiesTable.id, Number(activityId)));
 
-      const rows = await db.select().from(tripsTable);
-      setTrips(rows);
       router.back();
     } catch (err) {
-      setError('Failed to update trip. Please try again.');
+      setError('Failed to update activity. Please try again.');
       setLoading(false);
     }
   };
 
   const isFormValid =
     title.trim().length > 0 &&
-    destination.trim().length > 0 &&
-    startDate.trim().length > 0;
+    date.trim().length > 0 &&
+    duration.trim().length > 0 &&
+    !isNaN(Number(duration)) &&
+    Number(duration) > 0;
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -108,10 +131,10 @@ export default function EditTrip() {
             marginBottom: spacing.sm,
           }}
         >
-          Edit Trip
+          Edit Activity
         </Text>
         <Text style={{ fontSize: 13, color: colors.muted }}>
-          Update trip details
+          Update activity details
         </Text>
       </View>
 
@@ -142,7 +165,7 @@ export default function EditTrip() {
         </View>
       ) : null}
 
-      {/* Trip Title */}
+      {/* Activity Title */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -154,7 +177,7 @@ export default function EditTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Trip Title
+          Activity Title
         </Text>
         <TextInput
           value={title}
@@ -170,11 +193,11 @@ export default function EditTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Trip title"
+          accessibilityLabel="Activity title"
         />
       </View>
 
-      {/* Destination */}
+      {/* Date */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -186,44 +209,12 @@ export default function EditTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Destination
-        </Text>
-        <TextInput
-          value={destination}
-          onChangeText={setDestination}
-          placeholderTextColor={colors.muted}
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="Destination"
-        />
-      </View>
-
-      {/* Start Date */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Start Date
+          Date
         </Text>
         <TextInput
           placeholder="YYYY-MM-DD"
-          value={startDate}
-          onChangeText={setStartDate}
+          value={date}
+          onChangeText={setDate}
           placeholderTextColor={colors.muted}
           editable={!loading}
           style={{
@@ -235,11 +226,11 @@ export default function EditTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Start date"
+          accessibilityLabel="Activity date"
         />
       </View>
 
-      {/* End Date (Optional) */}
+      {/* Duration */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -251,13 +242,13 @@ export default function EditTrip() {
             letterSpacing: 0.5,
           }}
         >
-          End Date (Optional)
+          Duration (Hours)
         </Text>
         <TextInput
-          placeholder="YYYY-MM-DD"
-          value={endDate}
-          onChangeText={setEndDate}
+          value={duration}
+          onChangeText={setDuration}
           placeholderTextColor={colors.muted}
+          keyboardType="decimal-pad"
           editable={!loading}
           style={{
             borderWidth: 1,
@@ -268,13 +259,13 @@ export default function EditTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="End date"
+          accessibilityLabel="Activity duration"
         />
       </View>
 
       {/* Save Button - Main Action */}
       <Pressable
-        onPress={saveChanges}
+        onPress={updateActivity}
         disabled={!isFormValid || loading}
         style={({ pressed }) => ({
           backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
@@ -286,7 +277,7 @@ export default function EditTrip() {
           opacity: pressed && isFormValid && !loading ? 0.9 : 1,
         })}
         accessibilityRole="button"
-        accessibilityLabel="Save trip changes"
+        accessibilityLabel="Update activity"
       >
         {loading ? (
           <ActivityIndicator color="#fff" />

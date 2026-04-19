@@ -1,9 +1,8 @@
 import { colors, radius, spacing } from '@/constants/theme';
 import { db } from '@/db/client';
-import { tripsTable } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { activitiesTable, categoriesTable } from '@/db/schema';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useContext, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,49 +11,48 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Trip, TripContext } from '../../_layout';
 
-export default function EditTrip() {
+type Category = {
+  id: number;
+  name: string;
+  color: string;
+};
+
+export default function AddActivity() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const context = useContext(TripContext);
 
-  if (!context) return null;
-
-  const { trips, setTrips } = context;
-
-  const trip = trips.find((t: Trip) => t.id === Number(id));
-
-  if (!trip) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: colors.background,
-        }}
-      >
-        <Text style={{ color: colors.text, fontSize: 16 }}>Trip not found</Text>
-      </View>
-    );
-  }
-
-  const [title, setTitle] = useState(trip.title);
-  const [destination, setDestination] = useState(trip.destination);
-  const [startDate, setStartDate] = useState(trip.startDate);
-  const [endDate, setEndDate] = useState(trip.endDate || '');
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [duration, setDuration] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const loadCategories = async () => {
+      const rows = await db.select().from(categoriesTable);
+      setCategories(rows);
+      if (rows.length > 0) {
+        setSelectedCategory(rows[0].id);
+      }
+    };
+
+    loadCategories();
+  }, []);
+
   const validateForm = (): string | null => {
-    if (!title.trim()) return 'Trip title is required';
-    if (!destination.trim()) return 'Destination is required';
-    if (!startDate.trim()) return 'Start date is required';
+    if (!title.trim()) return 'Activity title is required';
+    if (!date.trim()) return 'Date is required';
+    if (!duration.trim()) return 'Duration is required';
+    if (isNaN(Number(duration))) return 'Duration must be a number';
+    if (Number(duration) <= 0) return 'Duration must be greater than 0';
+    if (!selectedCategory) return 'Please select a category';
     return null;
   };
 
-  const saveChanges = async () => {
+  const saveActivity = async () => {
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
@@ -65,29 +63,28 @@ export default function EditTrip() {
     setLoading(true);
 
     try {
-      await db
-        .update(tripsTable)
-        .set({
-          title: title.trim(),
-          destination: destination.trim(),
-          startDate: startDate.trim(),
-          endDate: endDate.trim() || null,
-        })
-        .where(eq(tripsTable.id, Number(id)));
+      await db.insert(activitiesTable).values({
+        tripId: Number(id),
+        title: title.trim(),
+        date: date.trim(),
+        duration: Number(duration),
+        categoryId: selectedCategory!,
+      });
 
-      const rows = await db.select().from(tripsTable);
-      setTrips(rows);
       router.back();
     } catch (err) {
-      setError('Failed to update trip. Please try again.');
+      setError('Failed to save activity. Please try again.');
       setLoading(false);
     }
   };
 
   const isFormValid =
     title.trim().length > 0 &&
-    destination.trim().length > 0 &&
-    startDate.trim().length > 0;
+    date.trim().length > 0 &&
+    duration.trim().length > 0 &&
+    !isNaN(Number(duration)) &&
+    Number(duration) > 0 &&
+    selectedCategory !== null;
 
   return (
     <ScrollView
@@ -108,10 +105,10 @@ export default function EditTrip() {
             marginBottom: spacing.sm,
           }}
         >
-          Edit Trip
+          Add Activity
         </Text>
         <Text style={{ fontSize: 13, color: colors.muted }}>
-          Update trip details
+          Create a new activity for your trip
         </Text>
       </View>
 
@@ -142,7 +139,7 @@ export default function EditTrip() {
         </View>
       ) : null}
 
-      {/* Trip Title */}
+      {/* Activity Title */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -154,9 +151,10 @@ export default function EditTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Trip Title
+          Activity Title
         </Text>
         <TextInput
+          placeholder="e.g., Museum visit, Hiking"
           value={title}
           onChangeText={setTitle}
           placeholderTextColor={colors.muted}
@@ -170,11 +168,12 @@ export default function EditTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Trip title"
+          accessibilityLabel="Activity title"
+          accessibilityHint="Enter the name of the activity"
         />
       </View>
 
-      {/* Destination */}
+      {/* Date */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -186,44 +185,12 @@ export default function EditTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Destination
-        </Text>
-        <TextInput
-          value={destination}
-          onChangeText={setDestination}
-          placeholderTextColor={colors.muted}
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="Destination"
-        />
-      </View>
-
-      {/* Start Date */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Start Date
+          Date
         </Text>
         <TextInput
           placeholder="YYYY-MM-DD"
-          value={startDate}
-          onChangeText={setStartDate}
+          value={date}
+          onChangeText={setDate}
           placeholderTextColor={colors.muted}
           editable={!loading}
           style={{
@@ -235,11 +202,12 @@ export default function EditTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Start date"
+          accessibilityLabel="Activity date"
+          accessibilityHint="Enter date in YYYY-MM-DD format"
         />
       </View>
 
-      {/* End Date (Optional) */}
+      {/* Duration */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -251,13 +219,14 @@ export default function EditTrip() {
             letterSpacing: 0.5,
           }}
         >
-          End Date (Optional)
+          Duration (Hours)
         </Text>
         <TextInput
-          placeholder="YYYY-MM-DD"
-          value={endDate}
-          onChangeText={setEndDate}
+          placeholder="e.g., 2.5"
+          value={duration}
+          onChangeText={setDuration}
           placeholderTextColor={colors.muted}
+          keyboardType="decimal-pad"
           editable={!loading}
           style={{
             borderWidth: 1,
@@ -268,13 +237,109 @@ export default function EditTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="End date"
+          accessibilityLabel="Activity duration"
+          accessibilityHint="Enter duration in hours"
         />
+      </View>
+
+      {/* Category Selection */}
+      <View style={{ marginBottom: spacing.lg }}>
+        <Text
+          style={{
+            fontSize: 13,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: spacing.md,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+          }}
+        >
+          Category
+        </Text>
+
+        {categories.length === 0 ? (
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.md,
+              padding: spacing.md,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: colors.muted, fontSize: 13 }}>
+              No categories available
+            </Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: spacing.xs }}>
+              Create a category first in the Categories tab
+            </Text>
+          </View>
+        ) : (
+          <View style={{ gap: spacing.sm }}>
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+
+              return (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => setSelectedCategory(cat.id)}
+                  disabled={loading}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    borderRadius: radius.md,
+                    padding: spacing.md,
+                    backgroundColor: isSelected ? colors.primary : colors.card,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={`${cat.name} category`}
+                >
+                  <View
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: isSelected ? '#fff' : colors.primary,
+                      marginRight: spacing.md,
+                    }}
+                  >
+                    {isSelected && (
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: '#fff',
+                          margin: 2,
+                        }}
+                      />
+                    )}
+                  </View>
+                  <Text
+                    style={{
+                      color: isSelected ? '#fff' : colors.text,
+                      fontWeight: isSelected ? '600' : '500',
+                      fontSize: 14,
+                      flex: 1,
+                    }}
+                  >
+                    {cat.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* Save Button - Main Action */}
       <Pressable
-        onPress={saveChanges}
+        onPress={saveActivity}
         disabled={!isFormValid || loading}
         style={({ pressed }) => ({
           backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
@@ -286,7 +351,7 @@ export default function EditTrip() {
           opacity: pressed && isFormValid && !loading ? 0.9 : 1,
         })}
         accessibilityRole="button"
-        accessibilityLabel="Save trip changes"
+        accessibilityLabel="Save activity"
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -299,7 +364,7 @@ export default function EditTrip() {
               letterSpacing: 0.5,
             }}
           >
-            Save Changes
+            Save Activity
           </Text>
         )}
       </Pressable>

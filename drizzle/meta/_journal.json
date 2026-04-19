@@ -8,6 +8,41 @@
       "when": 1776174602595,
       "tag": "0000_woozy_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776176201209,
+      "tag": "0001_chief_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776287860402,
+      "tag": "0002_flaky_chameleon",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1776288295212,
+      "tag": "0003_premium_photon",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1776290797289,
+      "tag": "0004_aromatic_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1776458285409,
+      "tag": "0005_tired_blue_shield",
+      "breakpoints": true
     }
   ]
 }

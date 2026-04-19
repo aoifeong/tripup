@@ -1,49 +1,188 @@
+import { colors } from '@/constants/theme';
 import { db } from '@/db/client';
 import { tripsTable } from '@/db/schema';
+import { seedDatabaseIfEmpty } from '@/db/seed';
 import { Stack } from 'expo-router';
-import { createContext, useEffect, useState } from 'react';
+import * as SplashScreenLib from 'expo-splash-screen'; // ← ADD THIS
+import { createContext, Dispatch, SetStateAction, useEffect, useState } from 'react';
+import SplashScreen from './splash';
+
+// Keep the splash visible while loading ← ADD THIS
+SplashScreenLib.preventAutoHideAsync();
 
 export type Trip = {
   id: number;
   title: string;
   destination: string;
   startDate: string;
+  endDate?: string;
+};
+
+export type User = {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
 };
 
 type TripContextType = {
   trips: Trip[];
-  setTrips: React.Dispatch<React.SetStateAction<Trip[]>>;
+  setTrips: Dispatch<SetStateAction<Trip[]>>;
+};
+
+type AuthContextType = {
+  currentUser: User | null;
+  setCurrentUser: Dispatch<SetStateAction<User | null>>;
 };
 
 export const TripContext = createContext<TripContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 export default function RootLayout() {
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadTrips = async () => {
-      const rows = await db.select().from(tripsTable);
+    const bootstrapAsync = async () => {
+      try {
+        // Initialize database with seed data if empty
+        await seedDatabaseIfEmpty();
 
-      if (rows.length === 0) {
-        await db.insert(tripsTable).values([
-          { title: 'Paris Trip', destination: 'France', startDate: '2026-06-10' },
-          { title: 'Rome Getaway', destination: 'Italy', startDate: '2026-07-02' },
-          { title: 'Barcelona Holiday', destination: 'Spain', startDate: '2026-08-15' },
-        ]);
+        // Load trips
+        const tripRows = await db.select().from(tripsTable);
+        setTrips(tripRows);
 
-        const seededRows = await db.select().from(tripsTable);
-        setTrips(seededRows);
-      } else {
-        setTrips(rows);
+        // Note: Auth state is managed separately through the app
+        // Users must explicitly login/register
+      } catch (e) {
+        // If there's an error loading data, app still works
+        console.error('Failed to restore session:', e);
+      } finally {
+        // Hide native splash and show custom splash ← ADD THIS
+        await SplashScreenLib.hideAsync();
+        setIsLoading(false);
       }
     };
 
-    loadTrips();
+    bootstrapAsync();
   }, []);
 
+  // Show loading screen while initializing
+  if (isLoading) {
+    return <SplashScreen />;
+  }
+
   return (
-    <TripContext.Provider value={{ trips, setTrips }}>
-      <Stack />
-    </TripContext.Provider>
+    <AuthContext.Provider value={{ currentUser, setCurrentUser }}>
+      <TripContext.Provider value={{ trips, setTrips }}>
+        <Stack
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: colors.card,
+            },
+            headerTintColor: colors.primary,
+            headerTitleStyle: {
+              fontWeight: '700',
+              fontSize: 17,
+              color: colors.text,
+            },
+            headerShadowVisible: false,
+            contentStyle: {
+              backgroundColor: colors.background,
+            },
+          }}
+        >
+          {currentUser ? (
+            // Authenticated Routes
+            <>
+              <Stack.Screen
+                name="(tabs)"
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/index"
+                options={{
+                  title: 'Trip Details',
+                  headerBackTitle: 'Back',
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/edit"
+                options={{
+                  title: 'Edit Trip',
+                  headerBackTitle: 'Back',
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/activities"
+                options={{
+                  title: 'Activities',
+                  headerBackTitle: 'Back',
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/add-activity"
+                options={{
+                  title: 'Add Activity',
+                  headerBackTitle: 'Back',
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/edit-activity"
+                options={{
+                  title: 'Edit Activity',
+                  headerBackTitle: 'Back',
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/targets"
+                options={{
+                  title: 'Targets',
+                  headerBackTitle: 'Back',
+                }}
+              />
+              <Stack.Screen
+                name="trip/[id]/insights"
+                options={{
+                  title: 'Insights',
+                  headerBackTitle: 'Back',
+                }}
+              />
+              <Stack.Screen
+                name="categories"
+                options={{
+                  title: 'Categories',
+                  headerBackTitle: 'Back',
+                }}
+              />
+            </>
+          ) : (
+            // Unauthenticated Routes
+            <>
+              <Stack.Screen
+                name="login"
+                options={{
+                  title: 'Sign In',
+                  headerBackTitle: 'Back',
+                }}
+              />
+              <Stack.Screen
+                name="register"
+                options={{
+                  title: 'Create Account',
+                  headerBackTitle: 'Back',
+                }}
+              />
+            </>
+          )}
+        </Stack>
+      </TripContext.Provider>
+    </AuthContext.Provider>
   );
 }

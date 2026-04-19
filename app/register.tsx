@@ -1,74 +1,103 @@
+import { AuthContext, User } from '@/app/_layout';
 import { colors, radius, spacing } from '@/constants/theme';
 import { db } from '@/db/client';
-import { tripsTable } from '@/db/schema';
+import { usersTable } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { useRouter } from 'expo-router';
 import { useContext, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { TripContext } from './_layout';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-export default function AddTrip() {
+export default function RegisterScreen() {
   const router = useRouter();
-  const context = useContext(TripContext);
+  const auth = useContext(AuthContext);
 
-  if (!context) return null;
-
-  const { setTrips } = context;
-
-  const [title, setTitle] = useState('');
-  const [destination, setDestination] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const validateForm = (): string | null => {
-    if (!title.trim()) return 'Trip title is required';
-    if (!destination.trim()) return 'Destination is required';
-    if (!startDate.trim()) return 'Start date is required';
-    if (!endDate.trim()) return 'End date is required';
+  if (!auth) return null;
+
+  const { setCurrentUser } = auth;
+
+  const validatePassword = (pwd: string): string | null => {
+    if (pwd.length < 6) return 'Password must be at least 6 characters';
     return null;
   };
 
-  const saveTrip = async () => {
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+  const handleRegister = async () => {
     setError('');
     setLoading(true);
 
     try {
-      await db.insert(tripsTable).values({
-        title: title.trim(),
-        destination: destination.trim(),
-        startDate: startDate.trim(),
-        endDate: endDate.trim(),
+      // Validation
+      if (!name.trim()) {
+        setError('Name is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!email.trim()) {
+        setError('Email is required');
+        setLoading(false);
+        return;
+      }
+
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        setError(passwordError);
+        setLoading(false);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+
+      // Check if email exists
+      const existing = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.email, email.trim()));
+
+      if (existing.length > 0) {
+        setError('An account with this email already exists');
+        setLoading(false);
+        return;
+      }
+
+      // Create user
+      await db.insert(usersTable).values({
+        name: name.trim(),
+        email: email.trim(),
+        password,
       });
 
-      const rows = await db.select().from(tripsTable);
-      setTrips(rows);
+      const createdUsers = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.email, email.trim()));
 
-      router.back();
+      if (createdUsers.length > 0) {
+        setCurrentUser(createdUsers[0] as User);
+        setError('');
+        router.replace('/');
+      }
     } catch (err) {
-      setError('Failed to save trip. Please try again.');
+      setError('An error occurred. Please try again.');
       setLoading(false);
     }
   };
 
   const isFormValid =
-    title.trim().length > 0 &&
-    destination.trim().length > 0 &&
-    startDate.trim().length > 0 &&
-    endDate.trim().length > 0;
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length >= 6 &&
+    password === confirmPassword;
 
   return (
     <ScrollView
@@ -80,19 +109,24 @@ export default function AddTrip() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <View style={{ marginBottom: spacing.lg }}>
+      <View style={{ marginBottom: spacing.xl, marginTop: spacing.lg }}>
         <Text
           style={{
-            fontSize: 24,
+            fontSize: 28,
             fontWeight: '700',
             color: colors.text,
             marginBottom: spacing.sm,
           }}
         >
-          Plan New Trip
+          Create Account
         </Text>
-        <Text style={{ fontSize: 13, color: colors.muted }}>
-          Create a new trip to organize your activities
+        <Text
+          style={{
+            fontSize: 14,
+            color: colors.muted,
+          }}
+        >
+          Sign up to get started with your trips
         </Text>
       </View>
 
@@ -108,7 +142,7 @@ export default function AddTrip() {
             marginBottom: spacing.lg,
           }}
           accessible={true}
-          accessibilityLiveRegion="polite"
+          accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
         >
           <Text
@@ -123,7 +157,7 @@ export default function AddTrip() {
         </View>
       ) : null}
 
-      {/* Trip Title */}
+      {/* Name Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -135,13 +169,14 @@ export default function AddTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Trip Title
+          Full Name
         </Text>
         <TextInput
-          placeholder="e.g., Summer Vacation 2026"
-          value={title}
-          onChangeText={setTitle}
+          placeholder="John Doe"
+          value={name}
+          onChangeText={setName}
           placeholderTextColor={colors.muted}
+          autoCapitalize="words"
           editable={!loading}
           style={{
             borderWidth: 1,
@@ -152,12 +187,12 @@ export default function AddTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Trip title"
-          accessibilityHint="Enter the name of your trip"
+          accessibilityLabel="Full name"
+          accessibilityHint="Enter your full name"
         />
       </View>
 
-      {/* Destination */}
+      {/* Email Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -169,13 +204,15 @@ export default function AddTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Destination
+          Email
         </Text>
         <TextInput
-          placeholder="e.g., Paris, France"
-          value={destination}
-          onChangeText={setDestination}
+          placeholder="you@example.com"
+          value={email}
+          onChangeText={setEmail}
           placeholderTextColor={colors.muted}
+          keyboardType="email-address"
+          autoCapitalize="none"
           editable={!loading}
           style={{
             borderWidth: 1,
@@ -186,12 +223,12 @@ export default function AddTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Destination"
-          accessibilityHint="Enter your trip destination"
+          accessibilityLabel="Email address"
+          accessibilityHint="Enter your email address"
         />
       </View>
 
-      {/* Start Date */}
+      {/* Password Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -203,13 +240,14 @@ export default function AddTrip() {
             letterSpacing: 0.5,
           }}
         >
-          Start Date
+          Password
         </Text>
         <TextInput
-          placeholder="YYYY-MM-DD"
-          value={startDate}
-          onChangeText={setStartDate}
+          placeholder="At least 6 characters"
+          value={password}
+          onChangeText={setPassword}
           placeholderTextColor={colors.muted}
+          secureTextEntry
           editable={!loading}
           style={{
             borderWidth: 1,
@@ -220,12 +258,23 @@ export default function AddTrip() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Start date"
-          accessibilityHint="Enter start date in YYYY-MM-DD format"
+          accessibilityLabel="Password"
+          accessibilityHint="Enter a password with at least 6 characters"
         />
+        {password.length > 0 && password.length < 6 && (
+          <Text
+            style={{
+              fontSize: 12,
+              color: '#ea580c',
+              marginTop: spacing.xs,
+            }}
+          >
+            Password must be at least 6 characters
+          </Text>
+        )}
       </View>
 
-      {/* End Date */}
+      {/* Confirm Password Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -237,31 +286,46 @@ export default function AddTrip() {
             letterSpacing: 0.5,
           }}
         >
-          End Date
+          Confirm Password
         </Text>
         <TextInput
-          placeholder="YYYY-MM-DD"
-          value={endDate}
-          onChangeText={setEndDate}
+          placeholder="••••••••"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
           placeholderTextColor={colors.muted}
+          secureTextEntry
           editable={!loading}
           style={{
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor:
+              confirmPassword && password !== confirmPassword
+                ? '#fca5a5'
+                : colors.border,
             padding: spacing.md,
             borderRadius: radius.md,
             backgroundColor: colors.card,
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="End date"
-          accessibilityHint="Enter end date in YYYY-MM-DD format"
+          accessibilityLabel="Confirm password"
+          accessibilityHint="Re-enter your password to confirm"
         />
+        {confirmPassword && password !== confirmPassword && (
+          <Text
+            style={{
+              fontSize: 12,
+              color: '#dc2626',
+              marginTop: spacing.xs,
+            }}
+          >
+            Passwords do not match
+          </Text>
+        )}
       </View>
 
-      {/* Save Button - Main Action */}
+      {/* Register Button - Main Action */}
       <Pressable
-        onPress={saveTrip}
+        onPress={handleRegister}
         disabled={!isFormValid || loading}
         style={({ pressed }) => ({
           backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
@@ -269,11 +333,12 @@ export default function AddTrip() {
           paddingHorizontal: spacing.lg,
           borderRadius: radius.md,
           alignItems: 'center',
-          marginBottom: spacing.sm,
+          marginBottom: spacing.lg,
           opacity: pressed && isFormValid && !loading ? 0.9 : 1,
         })}
         accessibilityRole="button"
-        accessibilityLabel="Create trip"
+        accessibilityLabel="Create account"
+        accessibilityHint="Register with your information"
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -286,14 +351,47 @@ export default function AddTrip() {
               letterSpacing: 0.5,
             }}
           >
-            Create Trip
+            Create Account
           </Text>
         )}
       </Pressable>
 
-      {/* Cancel Button - Secondary */}
+      {/* Divider */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: spacing.lg,
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            height: 0.5,
+            backgroundColor: colors.border,
+          }}
+        />
+        <Text
+          style={{
+            color: colors.muted,
+            fontSize: 12,
+            marginHorizontal: spacing.md,
+          }}
+        >
+          Already have an account?
+        </Text>
+        <View
+          style={{
+            flex: 1,
+            height: 0.5,
+            backgroundColor: colors.border,
+          }}
+        />
+      </View>
+
+      {/* Login Link - Secondary Action */}
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => router.push('/login')}
         disabled={loading}
         style={({ pressed }) => ({
           borderWidth: 1,
@@ -305,16 +403,17 @@ export default function AddTrip() {
           opacity: pressed && !loading ? 0.7 : 1,
         })}
         accessibilityRole="button"
-        accessibilityLabel="Cancel"
+        accessibilityLabel="Sign in"
+        accessibilityHint="Go to login screen to sign in with existing account"
       >
         <Text
           style={{
-            color: colors.text,
+            color: colors.primary,
             fontWeight: '600',
             fontSize: 15,
           }}
         >
-          Cancel
+          Sign In
         </Text>
       </Pressable>
 
