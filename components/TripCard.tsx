@@ -1,34 +1,40 @@
-import { Button, Text, View } from 'react-native';
-
-type Trip = {
-  id: number;
-  title: string;
-  destination: string;
-  startDate: string;
-};
+import { Trip } from '@/app/_layout';
+import { useRouter } from 'expo-router';
+import { Pressable, Text } from 'react-native';
 
 type Props = {
   trip: Trip;
-  onRemove: (id: number) => void;
-  onEdit: (trip: Trip) => void;
 };
 
-export default function TripCard({ trip, onRemove, onEdit }: Props) {
+export default function TripCard({ trip }: Props) {
+  const router = useRouter();
+
+  const openDetails = () => {
+    router.push({
+      pathname: '/trip/[id]',
+      params: { id: trip.id.toString() },
+    });
+  };
+
   return (
-    <View
-      style={{
-        padding: 12,
-        borderWidth: 1,
-        marginBottom: 10,
-        borderRadius: 8,
-      }}
+    <Pressable
+      accessibilityLabel={`${trip.title}, ${trip.destination}, view details`}
+      accessibilityRole="button"
+      onPress={openDetails}
+      style={({ pressed }) => [
+        {
+          padding: 12,
+          borderWidth: 1,
+          marginBottom: 10,
+          borderRadius: 8,
+          backgroundColor: '#fff',
+        },
+        pressed ? { opacity: 0.85 } : null,
+      ]}
     >
       <Text style={{ fontSize: 18 }}>{trip.title}</Text>
       <Text>{trip.destination}</Text>
       <Text>{trip.startDate}</Text>
-
-      <Button title="Remove" onPress={() => onRemove(trip.id)} />
-      <Button title="Edit" onPress={() => onEdit(trip)} />
-    </View>
+    </Pressable>
   );
 }
