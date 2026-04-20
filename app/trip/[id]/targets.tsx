@@ -1,17 +1,11 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { getColors, radius, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
 import { db } from '@/db/client';
-import { activitiesTable, targetsTable } from '@/db/schema';
+import { activitiesTable, categoriesTable, targetsTable } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-
-type Target = {
-  id: number;
-  tripId: number;
-  name: string;
-  targetValue: number;
-};
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useContext, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 
 type Activity = {
   id: number;
@@ -22,344 +16,426 @@ type Activity = {
   categoryId: number;
 };
 
+type Category = {
+  id: number;
+  name: string;
+  color: string;
+};
+
+type Target = {
+  id: number;
+  tripId: number;
+  name: string;
+  targetValue: number;
+};
+
+type CategoryStat = {
+  categoryId: number;
+  categoryName: string;
+  color: string;
+  count: number;
+  duration: number;
+};
+
+// targets screen; shows progress against the trip's target activity count
+// plus a per-category breakdown of time spent
 export default function TargetsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const themeContext = useContext(ThemeContext);
 
-  const [targets, setTargets] = useState<Target[]>([]);
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
+
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [name, setName] = useState('');
-  const [targetValue, setTargetValue] = useState('');
+  const [target, setTarget] = useState<Target | null>(null);
+  const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
 
+  // refresh on focus so newly-added activities update the progress bar
+  useFocusEffect(
+  useCallback(() => {
+    loadData();
+  }, [id])
+);
+
+  // pulls activities + the trip's target + categories and tallies them up
   const loadData = async () => {
-    const targetRows = await db
-      .select()
-      .from(targetsTable)
-      .where(eq(targetsTable.tripId, Number(id)));
+    try {
+      if (!id) return;
 
-    const activityRows = await db
-      .select()
-      .from(activitiesTable)
-      .where(eq(activitiesTable.tripId, Number(id)));
+      // categories
+      const categoryRows = await db.select().from(categoriesTable);
+      const categoryMap = new Map(categoryRows.map((cat) => [cat.id, cat]));
 
-    setTargets(targetRows);
-    setActivities(activityRows);
+      // activities for this trip
+      const activityRows = await db
+        .select()
+        .from(activitiesTable)
+        .where(eq(activitiesTable.tripId, Number(id)));
+      setActivities(activityRows);
+
+      // target for this trip- assuming one target per trip
+      const targetRows = await db
+        .select()
+        .from(targetsTable)
+        .where(eq(targetsTable.tripId, Number(id)));
+      setTarget(targetRows[0] ?? null);
+
+      // group activities by category to get per-category count + total duration
+      const stats: Record<number, CategoryStat> = {};
+      activityRows.forEach((activity) => {
+        const category = categoryMap.get(activity.categoryId);
+        const categoryName = category?.name || 'Unknown';
+        const categoryColor = category?.color || '#3b82f6';
+
+        if (!stats[activity.categoryId]) {
+          stats[activity.categoryId] = {
+            categoryId: activity.categoryId,
+            categoryName,
+            color: categoryColor,
+            count: 0,
+            duration: 0,
+          };
+        }
+        stats[activity.categoryId].count++;
+        stats[activity.categoryId].duration += activity.duration;
+      });
+
+      setCategoryStats(Object.values(stats));
+    } catch (err) {
+      console.error('Failed to load targets:', err);
+    }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [id]);
+  if (!id) return null;
 
-  const saveTarget = async () => {
-    if (!name.trim() || !targetValue.trim()) return;
+  const totalActivities = activities.length;
+  const totalDuration = activities.reduce((sum, a) => sum + a.duration, 0);
 
-    await db.insert(targetsTable).values({
-      tripId: Number(id),
-      name: name.trim(),
-      targetValue: Number(targetValue),
-    });
+  // figure out progress % against the target
+  // then flag whether the target was met or exceeded so the ui can change colors
+  const targetValue = target?.targetValue ?? 0;
+  const progress = targetValue > 0 ? (totalActivities / targetValue) * 100 : 0;
+  const remaining = Math.max(targetValue - totalActivities, 0);
+  const isMet = totalActivities >= targetValue && targetValue > 0;
+  const isExceeded = totalActivities > targetValue && targetValue > 0;
 
-    setName('');
-    setTargetValue('');
-    loadData();
-  };
-
-  const deleteTarget = async (targetId: number) => {
-    await db.delete(targetsTable).where(eq(targetsTable.id, targetId));
-    loadData();
-  };
-
-  const totalHours = activities.reduce((sum, activity) => sum + activity.duration, 0);
+  // three states: exceeded (purple), met (green), behind (amber)
+  // colors for badge bg/border/text all change together
+  const statusColor = isExceeded ? '#9333ea' : isMet ? '#22c55e' : '#f59e0b';
+  const statusBg = isExceeded ? '#f3e8ff' : isMet ? '#dcfce7' : '#fef3c7';
+  const statusBorder = isExceeded ? '#c084fc' : isMet ? '#86efac' : '#fcd34d';
+  const statusLabel = isExceeded
+    ? 'Target Exceeded!'
+    : isMet
+    ? 'Target Met!'
+    : 'Behind Target';
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <>
+      <Stack.Screen options={{ title: 'Targets' }} />
       <ScrollView
+        style={{ backgroundColor: colors.background }}
         contentContainerStyle={{
           paddingHorizontal: spacing.lg,
           paddingVertical: spacing.lg,
+          backgroundColor: colors.background,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={{ marginBottom: spacing.lg }}>
-          <Text style={{
-            fontSize: 24,
+        <Text
+          style={{
+            fontSize: 28,
             fontWeight: '700',
             color: colors.text,
-            marginBottom: 4,
-          }}>
-            Targets
-          </Text>
-          <Text style={{
-            fontSize: 13,
-            color: colors.muted,
-          }}>
-            Set activity goals
-          </Text>
-        </View>
+            marginBottom: spacing.lg,
+          }}
+        >
+          Activity Targets
+        </Text>
 
-        {/* Create Target Form */}
-        <View style={{
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.md,
-          padding: spacing.md,
-          backgroundColor: colors.card,
-          marginBottom: spacing.lg,
-        }}>
-          <Text style={{
-            fontSize: 14,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.md,
-          }}>
-            Create New Target
-          </Text>
-
-          {/* Name Input */}
-          <TextInput
-            placeholder="Target name (e.g., Hiking Hours)"
-            value={name}
-            onChangeText={setName}
-            placeholderTextColor={colors.muted}
+        {/* main target card; shows X / Y activities, status badge, progress bar */}
+        {target ? (
+          <View
             style={{
+              backgroundColor: colors.card,
               borderWidth: 1,
               borderColor: colors.border,
-              padding: spacing.md,
               borderRadius: radius.md,
-              backgroundColor: colors.background,
-              color: colors.text,
-              fontSize: 14,
-              marginBottom: spacing.md,
+              padding: spacing.lg,
+              marginBottom: spacing.lg,
             }}
-            accessibilityLabel="Target name input"
-          />
-
-          {/* Hours Input */}
-          <TextInput
-            placeholder="Target hours (e.g., 10)"
-            value={targetValue}
-            onChangeText={setTargetValue}
-            placeholderTextColor={colors.muted}
-            keyboardType="decimal-pad"
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              padding: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor: colors.background,
-              color: colors.text,
-              fontSize: 14,
-              marginBottom: spacing.md,
-            }}
-            accessibilityLabel="Target hours input"
-          />
-
-          {/* Save Button */}
-          <Pressable
-            onPress={saveTarget}
-            disabled={!name.trim() || !targetValue.trim()}
-            style={({ pressed }) => ({
-              backgroundColor:
-                name.trim() && targetValue.trim() ? colors.primary : colors.border,
-              paddingVertical: 10,
-              borderRadius: radius.md,
-              alignItems: 'center',
-              opacity: pressed && name.trim() && targetValue.trim() ? 0.9 : 1,
-            })}
-            accessibilityRole="button"
-            accessibilityLabel="Save target"
           >
-            <Text style={{
-              color:
-                name.trim() && targetValue.trim() ? '#fff' : colors.muted,
-              fontWeight: '600',
-              fontSize: 13,
-            }}>
-              Save Target
+            <Text
+              style={{
+                fontSize: 12,
+                color: colors.muted,
+                marginBottom: spacing.sm,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              {target.name}
             </Text>
-          </Pressable>
+
+            {/* big number with target beside it, like "3 / 6 activities" */}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: spacing.md }}>
+              <Text style={{ fontSize: 40, fontWeight: '700', color: colors.primary }}>
+                {totalActivities}
+              </Text>
+              <Text style={{ fontSize: 18, color: colors.muted, marginLeft: 8 }}>
+                / {targetValue} activities
+              </Text>
+            </View>
+
+            {/* status badge with screen reader label so assistive tech announces the state */}
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                backgroundColor: statusBg,
+                borderWidth: 1,
+                borderColor: statusBorder,
+                paddingHorizontal: spacing.md,
+                paddingVertical: 6,
+                borderRadius: radius.md,
+                marginBottom: spacing.md,
+              }}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={`Target status: ${statusLabel}`}
+            >
+              <Text style={{ color: statusColor, fontWeight: '600', fontSize: 13 }}>
+                {statusLabel}
+              </Text>
+            </View>
+
+            {/* progress bar; fills based on progress %, capped at 100 so it doesnt overflow */}
+            <View
+              style={{
+                height: 10,
+                backgroundColor: colors.border,
+                borderRadius: 5,
+                overflow: 'hidden',
+                marginBottom: spacing.sm,
+              }}
+            >
+              <View
+                style={{
+                  height: '100%',
+                  backgroundColor: statusColor,
+                  width: `${Math.min(progress, 100)}%`,
+                }}
+              />
+            </View>
+
+            {/* shows "X% complete" + either "Y to go" / "Goal reached!" / "+Z over target" */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 12, color: colors.muted }}>
+                {Math.round(progress)}% complete
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>
+                {isExceeded
+                  ? `+${totalActivities - targetValue} over target`
+                  : remaining === 0
+                  ? 'Goal reached!'
+                  : `${remaining} to go`}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.md,
+              padding: spacing.lg,
+              marginBottom: spacing.lg,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: colors.muted, fontSize: 14 }}>No target set for this trip</Text>
+          </View>
+        )}
+
+        {/* small summary cards: total activities + total hours */}
+        <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl }}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.md,
+              padding: spacing.md,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                color: colors.muted,
+                marginBottom: 4,
+                textTransform: 'uppercase',
+              }}
+            >
+              Activities
+            </Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: colors.primary }}>
+              {totalActivities}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.md,
+              padding: spacing.md,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                color: colors.muted,
+                marginBottom: 4,
+                textTransform: 'uppercase',
+              }}
+            >
+              Total Hours
+            </Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: colors.primary }}>
+              {totalDuration}
+            </Text>
+          </View>
         </View>
 
-        {/* Targets List */}
-        {targets.length > 0 && (
-          <View>
-            <Text style={{
-              fontSize: 12,
-              fontWeight: '600',
-              color: colors.muted,
-              marginBottom: spacing.md,
-              textTransform: 'uppercase',
-            }}>
-              Your Targets ({targets.length})
-            </Text>
+        {/* breakdown by category: each card shows count + duration + % of total time */}
+        <View>
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: '700',
+              color: colors.text,
+              marginBottom: spacing.lg,
+            }}
+          >
+            By Category
+          </Text>
 
-            {targets.map((target) => {
-              const remaining = target.targetValue - totalHours;
-              const met = totalHours >= target.targetValue;
-              const progressPercent = Math.min(
-                (totalHours / target.targetValue) * 100,
-                100
-              );
-
-              return (
+          {categoryStats.length === 0 ? (
+            <View
+              style={{
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.md,
+                padding: spacing.lg,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: colors.muted, fontSize: 14 }}>No activities yet</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: spacing.sm }}>
+                Add activities to see targets
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: spacing.lg }}>
+              {categoryStats.map((stat) => (
                 <View
-                  key={target.id}
+                  key={stat.categoryId}
                   style={{
+                    backgroundColor: colors.card,
                     borderWidth: 1,
                     borderColor: colors.border,
                     borderRadius: radius.md,
-                    backgroundColor: colors.card,
-                    marginBottom: spacing.md,
-                    overflow: 'hidden',
+                    padding: spacing.lg,
                   }}
                 >
-                  {/* Header */}
-                  <View style={{
-                    padding: spacing.md,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                  }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{
-                        fontSize: 15,
+                  {/* colour dot + category name */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      marginBottom: spacing.md,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 3,
+                        backgroundColor: stat.color,
+                        marginRight: spacing.md,
+                      }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 16,
                         fontWeight: '600',
                         color: colors.text,
-                        marginBottom: 4,
-                      }}>
-                        {target.name}
+                        flex: 1,
+                      }}
+                    >
+                      {stat.categoryName}
+                    </Text>
+                  </View>
+
+                  <View style={{ marginBottom: spacing.md }}>
+                    <View style={{ marginBottom: spacing.sm }}>
+                      <Text style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+                        Activities
                       </Text>
-                      <Text style={{
-                        color: colors.muted,
-                        fontSize: 12,
-                      }}>
-                        Target: {target.targetValue}h
+                      <Text style={{ fontSize: 20, fontWeight: '600', color: colors.text }}>
+                        {stat.count}
                       </Text>
                     </View>
-                    <View style={{
-                      backgroundColor: met ? '#22c55e' : colors.background,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 4,
-                    }}>
-                      <Text style={{
-                        fontSize: 11,
-                        color: met ? '#fff' : colors.muted,
-                        fontWeight: '600',
-                      }}>
-                        {met ? 'Complete' : 'In Progress'}
+
+                    <View>
+                      <Text style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+                        Total Duration
+                      </Text>
+                      <Text style={{ fontSize: 20, fontWeight: '600', color: colors.text }}>
+                        {stat.duration}{' '}
+                        <Text style={{ fontSize: 14, fontWeight: '400' }}>hour(s)</Text>
                       </Text>
                     </View>
                   </View>
 
-                  {/* Progress */}
-                  <View style={{ padding: spacing.md }}>
-                    {/* Numbers */}
-                    <View style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      marginBottom: spacing.sm,
-                    }}>
-                      <Text style={{
-                        color: colors.text,
-                        fontSize: 14,
-                        fontWeight: '600',
-                      }}>
-                        {totalHours}h of {target.targetValue}h
-                      </Text>
-                      <Text style={{
-                        color: colors.muted,
-                        fontSize: 12,
-                      }}>
-                        {Math.round(progressPercent)}%
-                      </Text>
-                    </View>
-
-                    {/* Progress Bar */}
+                  {/* percentage bar of how much total time this category takes up */}
+                  <View>
+                    <Text style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
+                      {totalDuration > 0
+                        ? Math.round((stat.duration / totalDuration) * 100)
+                        : 0}
+                      % of total time
+                    </Text>
                     <View
                       style={{
                         height: 8,
                         backgroundColor: colors.border,
-                        borderRadius: 2,
+                        borderRadius: 4,
                         overflow: 'hidden',
-                        marginBottom: spacing.md,
                       }}
-                      accessible={true}
-                      accessibilityLabel={`Progress: ${Math.round(progressPercent)}%`}
                     >
                       <View
                         style={{
-                          width: `${progressPercent}%`,
-                          height: 8,
-                          backgroundColor: met ? '#22c55e' : colors.primary,
-                          borderRadius: 2,
+                          height: '100%',
+                          backgroundColor: stat.color,
+                          width: `${
+                            totalDuration > 0 ? (stat.duration / totalDuration) * 100 : 0
+                          }%`,
                         }}
                       />
                     </View>
-
-                    {/* Status Message */}
-                    <Text style={{
-                      color: colors.muted,
-                      fontSize: 12,
-                      textAlign: 'center',
-                    }}>
-                      {met
-                        ? 'Target complete!'
-                        : `${remaining}h remaining`}
-                    </Text>
                   </View>
-
-                  {/* Delete Action */}
-                  <Pressable
-                    onPress={() => deleteTarget(target.id)}
-                    style={({ pressed }) => ({
-                      padding: spacing.md,
-                      alignItems: 'center',
-                      borderTopWidth: 1,
-                      borderTopColor: colors.border,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${target.name}`}
-                  >
-                    <Text style={{
-                      color: '#dc2626',
-                      fontWeight: '600',
-                      fontSize: 13,
-                    }}>
-                      Delete
-                    </Text>
-                  </Pressable>
                 </View>
-              );
-            })}
-          </View>
-        )}
-
-        {targets.length === 0 && (
-          <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 15,
-              fontWeight: '600',
-              marginBottom: spacing.sm,
-            }}>
-              No targets yet
-            </Text>
-            <Text style={{
-              color: colors.muted,
-              fontSize: 13,
-              textAlign: 'center',
-            }}>
-              Create a target to track your progress
-            </Text>
-          </View>
-        )}
+              ))}
+            </View>
+          )}
+        </View>
 
         <View style={{ height: spacing.lg }} />
       </ScrollView>
-    </View>
+    </>
   );
 }

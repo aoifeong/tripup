@@ -1,16 +1,10 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { getColors, radius, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
 import { db } from '@/db/client';
 import { activitiesTable, categoriesTable } from '@/db/schema';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useContext, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 type Category = {
   id: number;
@@ -18,76 +12,107 @@ type Category = {
   color: string;
 };
 
-export default function AddActivity() {
+// form for creating a new activity inside the current trip
+export default function AddActivityScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const themeContext = useContext(ThemeContext);
   const router = useRouter();
+
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
 
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [duration, setDuration] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // load categories once on mount so can show the radio list
   useEffect(() => {
-    const loadCategories = async () => {
-      const rows = await db.select().from(categoriesTable);
-      setCategories(rows);
-      if (rows.length > 0) {
-        setSelectedCategory(rows[0].id);
-      }
-    };
-
     loadCategories();
   }, []);
 
-  const validateForm = (): string | null => {
-    if (!title.trim()) return 'Activity title is required';
-    if (!date.trim()) return 'Date is required';
-    if (!duration.trim()) return 'Duration is required';
-    if (isNaN(Number(duration))) return 'Duration must be a number';
-    if (Number(duration) <= 0) return 'Duration must be greater than 0';
-    if (!selectedCategory) return 'Please select a category';
-    return null;
+  const loadCategories = async () => {
+    try {
+      const rows = await db.select().from(categoriesTable);
+      setCategories(rows);
+      // pre-select the first one so user doesnt have to tap before saving
+      if (rows.length > 0) {
+        setSelectedCategoryId(rows[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
   };
 
-  const saveActivity = async () => {
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+  // validate all fields then insert into the db, then pop back to the activities list
+  const handleAddActivity = async () => {
     setError('');
     setLoading(true);
 
     try {
+      if (!title.trim()) {
+        setError('Activity title is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!date.trim()) {
+        setError('Date is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!duration.trim() || isNaN(Number(duration))) {
+        setError('Duration must be a valid number');
+        setLoading(false);
+        return;
+      }
+
+      if (!selectedCategoryId) {
+        setError('Please select a category');
+        setLoading(false);
+        return;
+      }
+
+      if (!id) {
+        setError('Trip not found');
+        setLoading(false);
+        return;
+      }
+
       await db.insert(activitiesTable).values({
         tripId: Number(id),
         title: title.trim(),
         date: date.trim(),
         duration: Number(duration),
-        categoryId: selectedCategory!,
+        categoryId: selectedCategoryId,
       });
 
       router.back();
     } catch (err) {
-      setError('Failed to save activity. Please try again.');
+      console.error('Error adding activity:', err);
+      setError('Failed to add activity. Please try again.');
       setLoading(false);
     }
   };
 
+  if (!id) return null;
+
+  // only enable the save button when everything's filled in + valid
   const isFormValid =
     title.trim().length > 0 &&
     date.trim().length > 0 &&
     duration.trim().length > 0 &&
     !isNaN(Number(duration)) &&
-    Number(duration) > 0 &&
-    selectedCategory !== null;
+    selectedCategoryId !== null;
 
   return (
+    <>
+    <Stack.Screen options={{ title: 'Add Activity' }} />
     <ScrollView
+    style={{ backgroundColor: colors.background }}
       contentContainerStyle={{
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.lg,
@@ -95,11 +120,10 @@ export default function AddActivity() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={{ marginBottom: spacing.lg }}>
+      <View style={{ marginBottom: spacing.xl }}>
         <Text
           style={{
-            fontSize: 24,
+            fontSize: 28,
             fontWeight: '700',
             color: colors.text,
             marginBottom: spacing.sm,
@@ -107,12 +131,12 @@ export default function AddActivity() {
         >
           Add Activity
         </Text>
-        <Text style={{ fontSize: 13, color: colors.muted }}>
-          Create a new activity for your trip
+        <Text style={{ fontSize: 14, color: colors.muted }}>
+          Log a new activity for this trip
         </Text>
       </View>
 
-      {/* Error State */}
+      {/* error banner with accessibility live region so screen readers announce it */}
       {error ? (
         <View
           style={{
@@ -124,22 +148,15 @@ export default function AddActivity() {
             marginBottom: spacing.lg,
           }}
           accessible={true}
-          accessibilityLiveRegion="polite"
+          accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
         >
-          <Text
-            style={{
-              color: '#dc2626',
-              fontSize: 13,
-              fontWeight: '500',
-            }}
-          >
+          <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '500' }}>
             {error}
           </Text>
         </View>
       ) : null}
 
-      {/* Activity Title */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -154,7 +171,7 @@ export default function AddActivity() {
           Activity Title
         </Text>
         <TextInput
-          placeholder="e.g., Museum visit, Hiking"
+          placeholder="e.g., Museum Visit"
           value={title}
           onChangeText={setTitle}
           placeholderTextColor={colors.muted}
@@ -169,11 +186,9 @@ export default function AddActivity() {
             fontSize: 15,
           }}
           accessibilityLabel="Activity title"
-          accessibilityHint="Enter the name of the activity"
         />
       </View>
 
-      {/* Date */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -203,11 +218,9 @@ export default function AddActivity() {
             fontSize: 15,
           }}
           accessibilityLabel="Activity date"
-          accessibilityHint="Enter date in YYYY-MM-DD format"
         />
       </View>
 
-      {/* Duration */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -219,7 +232,7 @@ export default function AddActivity() {
             letterSpacing: 0.5,
           }}
         >
-          Duration (Hours)
+          Duration (hours)
         </Text>
         <TextInput
           placeholder="e.g., 2.5"
@@ -238,11 +251,10 @@ export default function AddActivity() {
             fontSize: 15,
           }}
           accessibilityLabel="Activity duration"
-          accessibilityHint="Enter duration in hours"
         />
       </View>
 
-      {/* Category Selection */}
+      {/* category picker; built as radio buttons so only one can be selected */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -278,12 +290,12 @@ export default function AddActivity() {
         ) : (
           <View style={{ gap: spacing.sm }}>
             {categories.map((cat) => {
-              const isSelected = selectedCategory === cat.id;
+              const isSelected = selectedCategoryId === cat.id;
 
               return (
                 <Pressable
                   key={cat.id}
-                  onPress={() => setSelectedCategory(cat.id)}
+                  onPress={() => setSelectedCategoryId(cat.id)}
                   disabled={loading}
                   style={{
                     borderWidth: 1,
@@ -298,6 +310,7 @@ export default function AddActivity() {
                   accessibilityState={{ selected: isSelected }}
                   accessibilityLabel={`${cat.name} category`}
                 >
+                  {/* little radio circle; filled dot when selected */}
                   <View
                     style={{
                       width: 16,
@@ -337,9 +350,8 @@ export default function AddActivity() {
         )}
       </View>
 
-      {/* Save Button - Main Action */}
       <Pressable
-        onPress={saveActivity}
+        onPress={handleAddActivity}
         disabled={!isFormValid || loading}
         style={({ pressed }) => ({
           backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
@@ -369,7 +381,6 @@ export default function AddActivity() {
         )}
       </Pressable>
 
-      {/* Cancel Button - Secondary */}
       <Pressable
         onPress={() => router.back()}
         disabled={loading}
@@ -398,5 +409,5 @@ export default function AddActivity() {
 
       <View style={{ height: spacing.lg }} />
     </ScrollView>
-  );
+  </>);
 }

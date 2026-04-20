@@ -1,82 +1,98 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { TripContext } from '@/app/_layout';
+import { getColors, radius, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
 import { db } from '@/db/client';
 import { tripsTable } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useContext, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Trip, TripContext } from '../../_layout';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-export default function EditTrip() {
+// form for editing an existing trip; pre-fills with the current values from context
+export default function EditTripScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const context = useContext(TripContext);
+  const themeContext = useContext(ThemeContext);
+  const router = useRouter();
 
-  if (!context) return null;
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
 
-  const { trips, setTrips } = context;
+  // find the trip in context. all hooks have to be called before any early returns
+  // otherwise react complains about hook order changing between renders
+  const trip = context?.trips.find((t) => t.id === Number(id));
 
-  const trip = trips.find((t: Trip) => t.id === Number(id));
-
-  if (!trip) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: colors.background,
-        }}
-      >
-        <Text style={{ color: colors.text, fontSize: 16 }}>Trip not found</Text>
-      </View>
-    );
-  }
-
-  const [title, setTitle] = useState(trip.title);
-  const [destination, setDestination] = useState(trip.destination);
-  const [startDate, setStartDate] = useState(trip.startDate);
-  const [endDate, setEndDate] = useState(trip.endDate || '');
+  // pre-fill the form with the current trip values
+  const [title, setTitle] = useState(trip?.title ?? '');
+  const [destination, setDestination] = useState(trip?.destination ?? '');
+  const [startDate, setStartDate] = useState(trip?.startDate ?? '');
+  const [endDate, setEndDate] = useState(trip?.endDate ?? '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const validateForm = (): string | null => {
-    if (!title.trim()) return 'Trip title is required';
-    if (!destination.trim()) return 'Destination is required';
-    if (!startDate.trim()) return 'Start date is required';
-    return null;
+  if (!context || !id) return null;
+  if (!trip) return null;
+
+  const { setTrips } = context;
+
+  const validateDate = (dateStr: string): boolean => {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateStr)) return false;
+    const date = new Date(dateStr);
+    return date instanceof Date && !isNaN(date.getTime());
   };
 
-  const saveChanges = async () => {
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+  const handleSave = async () => {
     setError('');
     setLoading(true);
 
     try {
+      if (!title.trim()) {
+        setError('Trip title is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!destination.trim()) {
+        setError('Destination is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!validateDate(startDate)) {
+        setError('Invalid start date. Use YYYY-MM-DD');
+        setLoading(false);
+        return;
+      }
+
+      // end date is optional but if provided it has to be valid and after start
+      if (endDate.trim()) {
+        if (!validateDate(endDate)) {
+          setError('Invalid end date format. Use YYYY-MM-DD');
+          setLoading(false);
+          return;
+        }
+        if (new Date(endDate) < new Date(startDate)) {
+          setError('End date must be after start date');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // update the trip in the db, then refresh context so the list shows the new values
       await db
         .update(tripsTable)
         .set({
           title: title.trim(),
           destination: destination.trim(),
-          startDate: startDate.trim(),
+          startDate,
+          // empty string becomes null so the column is properly cleared
           endDate: endDate.trim() || null,
         })
-        .where(eq(tripsTable.id, Number(id)));
+        .where(eq(tripsTable.id, trip.id));
 
-      const rows = await db.select().from(tripsTable);
-      setTrips(rows);
+      const tripRows = await db.select().from(tripsTable);
+      setTrips(tripRows);
+
       router.back();
     } catch (err) {
       setError('Failed to update trip. Please try again.');
@@ -84,254 +100,237 @@ export default function EditTrip() {
     }
   };
 
-  const isFormValid =
-    title.trim().length > 0 &&
-    destination.trim().length > 0 &&
-    startDate.trim().length > 0;
+  const isFormValid = title.trim().length > 0 && destination.trim().length > 0;
 
   return (
-    <ScrollView
-      contentContainerStyle={{
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.lg,
-        backgroundColor: colors.background,
-      }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 24,
-            fontWeight: '700',
-            color: colors.text,
-            marginBottom: spacing.sm,
-          }}
-        >
-          Edit Trip
-        </Text>
-        <Text style={{ fontSize: 13, color: colors.muted }}>
-          Update trip details
-        </Text>
-      </View>
-
-      {/* Error State */}
-      {error ? (
-        <View
-          style={{
-            backgroundColor: '#fee2e2',
-            borderWidth: 1,
-            borderColor: '#fca5a5',
-            borderRadius: radius.md,
-            padding: spacing.md,
-            marginBottom: spacing.lg,
-          }}
-          accessible={true}
-          accessibilityLiveRegion="polite"
-          accessibilityRole="alert"
-        >
+    <>
+      <Stack.Screen options={{ title: 'Edit Trip' }} />
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.lg,
+          backgroundColor: colors.background,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={{ marginBottom: spacing.xl }}>
           <Text
             style={{
-              color: '#dc2626',
-              fontSize: 13,
-              fontWeight: '500',
+              fontSize: 28,
+              fontWeight: '700',
+              color: colors.text,
+              marginBottom: spacing.sm,
             }}
           >
-            {error}
+            Edit Trip
+          </Text>
+          <Text style={{ fontSize: 14, color: colors.muted }}>
+            Update your trip details
           </Text>
         </View>
-      ) : null}
 
-      {/* Trip Title */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Trip Title
-        </Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholderTextColor={colors.muted}
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="Trip title"
-        />
-      </View>
+        {error ? (
+          <View
+            style={{
+              backgroundColor: '#fee2e2',
+              borderWidth: 1,
+              borderColor: '#fca5a5',
+              borderRadius: radius.md,
+              padding: spacing.md,
+              marginBottom: spacing.lg,
+            }}
+            accessible={true}
+            accessibilityLiveRegion="assertive"
+            accessibilityRole="alert"
+          >
+            <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '500' }}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
 
-      {/* Destination */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Destination
-        </Text>
-        <TextInput
-          value={destination}
-          onChangeText={setDestination}
-          placeholderTextColor={colors.muted}
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="Destination"
-        />
-      </View>
-
-      {/* Start Date */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Start Date
-        </Text>
-        <TextInput
-          placeholder="YYYY-MM-DD"
-          value={startDate}
-          onChangeText={setStartDate}
-          placeholderTextColor={colors.muted}
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="Start date"
-        />
-      </View>
-
-      {/* End Date (Optional) */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          End Date (Optional)
-        </Text>
-        <TextInput
-          placeholder="YYYY-MM-DD"
-          value={endDate}
-          onChangeText={setEndDate}
-          placeholderTextColor={colors.muted}
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="End date"
-        />
-      </View>
-
-      {/* Save Button - Main Action */}
-      <Pressable
-        onPress={saveChanges}
-        disabled={!isFormValid || loading}
-        style={({ pressed }) => ({
-          backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
-          paddingVertical: 14,
-          paddingHorizontal: spacing.lg,
-          borderRadius: radius.md,
-          alignItems: 'center',
-          marginBottom: spacing.sm,
-          opacity: pressed && isFormValid && !loading ? 0.9 : 1,
-        })}
-        accessibilityRole="button"
-        accessibilityLabel="Save trip changes"
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
+        <View style={{ marginBottom: spacing.lg }}>
           <Text
             style={{
-              color: isFormValid && !loading ? '#fff' : colors.muted,
+              fontSize: 13,
               fontWeight: '600',
-              fontSize: 15,
+              color: colors.text,
+              marginBottom: spacing.sm,
+              textTransform: 'uppercase',
               letterSpacing: 0.5,
             }}
           >
-            Save Changes
+            Trip Title
           </Text>
-        )}
-      </Pressable>
+          <TextInput
+            placeholder="Trip title"
+            value={title}
+            onChangeText={setTitle}
+            placeholderTextColor={colors.muted}
+            editable={!loading}
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.card,
+              color: colors.text,
+              fontSize: 15,
+            }}
+            accessibilityLabel="Trip title"
+          />
+        </View>
 
-      {/* Cancel Button - Secondary */}
-      <Pressable
-        onPress={() => router.back()}
-        disabled={loading}
-        style={({ pressed }) => ({
-          borderWidth: 1,
-          borderColor: colors.border,
-          paddingVertical: 12,
-          paddingHorizontal: spacing.lg,
-          borderRadius: radius.md,
-          alignItems: 'center',
-          opacity: pressed && !loading ? 0.7 : 1,
-        })}
-        accessibilityRole="button"
-        accessibilityLabel="Cancel"
-      >
-        <Text
-          style={{
-            color: colors.text,
-            fontWeight: '600',
-            fontSize: 15,
-          }}
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: '600',
+              color: colors.text,
+              marginBottom: spacing.sm,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}
+          >
+            Destination
+          </Text>
+          <TextInput
+            placeholder="Destination"
+            value={destination}
+            onChangeText={setDestination}
+            placeholderTextColor={colors.muted}
+            editable={!loading}
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.card,
+              color: colors.text,
+              fontSize: 15,
+            }}
+            accessibilityLabel="Destination"
+          />
+        </View>
+
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: '600',
+              color: colors.text,
+              marginBottom: spacing.sm,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}
+          >
+            Start Date
+          </Text>
+          <TextInput
+            placeholder="YYYY-MM-DD"
+            value={startDate}
+            onChangeText={setStartDate}
+            placeholderTextColor={colors.muted}
+            editable={!loading}
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.card,
+              color: colors.text,
+              fontSize: 15,
+            }}
+            accessibilityLabel="Start date"
+          />
+        </View>
+
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: '600',
+              color: colors.text,
+              marginBottom: spacing.sm,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}
+          >
+            End Date (Optional)
+          </Text>
+          <TextInput
+            placeholder="YYYY-MM-DD"
+            value={endDate}
+            onChangeText={setEndDate}
+            placeholderTextColor={colors.muted}
+            editable={!loading}
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.card,
+              color: colors.text,
+              fontSize: 15,
+            }}
+            accessibilityLabel="End date"
+          />
+        </View>
+
+        <Pressable
+          onPress={handleSave}
+          disabled={!isFormValid || loading}
+          style={({ pressed }) => ({
+            backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
+            paddingVertical: 14,
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius.md,
+            alignItems: 'center',
+            marginBottom: spacing.sm,
+            opacity: pressed && isFormValid && !loading ? 0.9 : 1,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel="Save changes"
         >
-          Cancel
-        </Text>
-      </Pressable>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text
+              style={{
+                color: isFormValid && !loading ? '#fff' : colors.muted,
+                fontWeight: '600',
+                fontSize: 15,
+                letterSpacing: 0.5,
+              }}
+            >
+              Save Changes
+            </Text>
+          )}
+        </Pressable>
 
-      <View style={{ height: spacing.lg }} />
-    </ScrollView>
+        <Pressable
+          onPress={() => router.back()}
+          disabled={loading}
+          style={({ pressed }) => ({
+            borderWidth: 1,
+            borderColor: colors.border,
+            paddingVertical: 12,
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius.md,
+            alignItems: 'center',
+            opacity: pressed && !loading ? 0.7 : 1,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>
+            Cancel
+          </Text>
+        </Pressable>
+
+        <View style={{ height: spacing.lg }} />
+      </ScrollView>
+    </>
   );
 }

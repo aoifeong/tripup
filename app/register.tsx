@@ -1,16 +1,19 @@
 import { AuthContext, User } from '@/app/_layout';
-import { colors, radius, spacing } from '@/constants/theme';
+import { getColors, radius, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
 import { db } from '@/db/client';
 import { usersTable } from '@/db/schema';
+import { hashPassword } from '@/utils/hash';
 import { eq } from 'drizzle-orm';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useContext, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const auth = useContext(AuthContext);
-
+  const themeContext = useContext(ThemeContext);
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -74,7 +77,7 @@ export default function RegisterScreen() {
       await db.insert(usersTable).values({
         name: name.trim(),
         email: email.trim(),
-        password,
+        password: await hashPassword(password),
       });
 
       const createdUsers = await db
@@ -100,7 +103,10 @@ export default function RegisterScreen() {
     password === confirmPassword;
 
   return (
+    <>
+    <Stack.Screen options={{ title: 'Sign Up' }} />
     <ScrollView
+    style={{ backgroundColor: colors.background }}
       contentContainerStyle={{
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.lg,
@@ -172,7 +178,7 @@ export default function RegisterScreen() {
           Full Name
         </Text>
         <TextInput
-          placeholder="John Doe"
+          placeholder="Full Name"
           value={name}
           onChangeText={setName}
           placeholderTextColor={colors.muted}
@@ -419,5 +425,5 @@ export default function RegisterScreen() {
 
       <View style={{ height: spacing.lg }} />
     </ScrollView>
-  );
+  </>);
 }

@@ -1,119 +1,90 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { TripContext } from '@/app/_layout';
+import { getColors, radius, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
 import { db } from '@/db/client';
-import { activitiesTable } from '@/db/schema';
+import { tripsTable } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useContext, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-export default function EditActivity() {
-  const { id, activityId } = useLocalSearchParams<{
-    id: string;
-    activityId: string;
-  }>();
-
+export default function EditTripScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const context = useContext(TripContext);
+  const themeContext = useContext(ThemeContext);
   const router = useRouter();
 
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState('');
-  const [duration, setDuration] = useState('');
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
+
+  if (!context || !id) return null;
+
+  const { trips, setTrips } = context;
+  const trip = trips.find((t) => t.id === Number(id));
+
+  if (!trip) return null;
+
+  const [title, setTitle] = useState(trip.title);
+  const [destination, setDestination] = useState(trip.destination);
+  const [startDate, setStartDate] = useState(trip.startDate);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const loadActivity = async () => {
-      try {
-        const result = await db
-          .select()
-          .from(activitiesTable)
-          .where(eq(activitiesTable.id, Number(activityId)));
-
-        if (result.length > 0) {
-          const activity = result[0];
-          setTitle(activity.title);
-          setDate(activity.date);
-          setDuration(String(activity.duration));
-        } else {
-          setError('Activity not found');
-        }
-      } catch (err) {
-        setError('Failed to load activity');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadActivity();
-  }, [activityId]);
-
-  const validateForm = (): string | null => {
-    if (!title.trim()) return 'Activity title is required';
-    if (!date.trim()) return 'Date is required';
-    if (!duration.trim()) return 'Duration is required';
-    if (isNaN(Number(duration))) return 'Duration must be a number';
-    if (Number(duration) <= 0) return 'Duration must be greater than 0';
-    return null;
+  const validateDate = (dateStr: string): boolean => {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateStr)) return false;
+    const date = new Date(dateStr);
+    return date instanceof Date && !isNaN(date.getTime());
   };
 
-  const updateActivity = async () => {
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+  const handleSave = async () => {
     setError('');
     setLoading(true);
 
     try {
+      if (!title.trim()) {
+        setError('Trip title is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!destination.trim()) {
+        setError('Destination is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!validateDate(startDate)) {
+        setError('Invalid start date. Use YYYY-MM-DD');
+        setLoading(false);
+        return;
+      }
+
       await db
-        .update(activitiesTable)
+        .update(tripsTable)
         .set({
           title: title.trim(),
-          date: date.trim(),
-          duration: Number(duration),
+          destination: destination.trim(),
+          startDate,
         })
-        .where(eq(activitiesTable.id, Number(activityId)));
+        .where(eq(tripsTable.id, trip.id));
+
+      const tripRows = await db.select().from(tripsTable);
+      setTrips(tripRows);
 
       router.back();
     } catch (err) {
-      setError('Failed to update activity. Please try again.');
+      setError('Failed to update trip. Please try again.');
       setLoading(false);
     }
   };
 
-  const isFormValid =
-    title.trim().length > 0 &&
-    date.trim().length > 0 &&
-    duration.trim().length > 0 &&
-    !isNaN(Number(duration)) &&
-    Number(duration) > 0;
-
-  if (isLoading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const isFormValid = title.trim().length > 0 && destination.trim().length > 0;
 
   return (
+    <>
+    <Stack.Screen options={{ title: 'Edit Activity' }} />
     <ScrollView
+    style={{ backgroundColor: colors.background }}
       contentContainerStyle={{
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.lg,
@@ -121,24 +92,22 @@ export default function EditActivity() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={{ marginBottom: spacing.lg }}>
+      <View style={{ marginBottom: spacing.xl }}>
         <Text
           style={{
-            fontSize: 24,
+            fontSize: 28,
             fontWeight: '700',
             color: colors.text,
             marginBottom: spacing.sm,
           }}
         >
-          Edit Activity
+          Edit Trip
         </Text>
-        <Text style={{ fontSize: 13, color: colors.muted }}>
-          Update activity details
+        <Text style={{ fontSize: 14, color: colors.muted }}>
+          Update your trip details
         </Text>
       </View>
 
-      {/* Error State */}
       {error ? (
         <View
           style={{
@@ -150,22 +119,15 @@ export default function EditActivity() {
             marginBottom: spacing.lg,
           }}
           accessible={true}
-          accessibilityLiveRegion="polite"
+          accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
         >
-          <Text
-            style={{
-              color: '#dc2626',
-              fontSize: 13,
-              fontWeight: '500',
-            }}
-          >
+          <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '500' }}>
             {error}
           </Text>
         </View>
       ) : null}
 
-      {/* Activity Title */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -177,9 +139,10 @@ export default function EditActivity() {
             letterSpacing: 0.5,
           }}
         >
-          Activity Title
+          Trip Title
         </Text>
         <TextInput
+          placeholder="Trip title"
           value={title}
           onChangeText={setTitle}
           placeholderTextColor={colors.muted}
@@ -193,11 +156,10 @@ export default function EditActivity() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Activity title"
+          accessibilityLabel="Trip title"
         />
       </View>
 
-      {/* Date */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -209,12 +171,44 @@ export default function EditActivity() {
             letterSpacing: 0.5,
           }}
         >
-          Date
+          Destination
+        </Text>
+        <TextInput
+          placeholder="Destination"
+          value={destination}
+          onChangeText={setDestination}
+          placeholderTextColor={colors.muted}
+          editable={!loading}
+          style={{
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: spacing.md,
+            borderRadius: radius.md,
+            backgroundColor: colors.card,
+            color: colors.text,
+            fontSize: 15,
+          }}
+          accessibilityLabel="Destination"
+        />
+      </View>
+
+      <View style={{ marginBottom: spacing.lg }}>
+        <Text
+          style={{
+            fontSize: 13,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: spacing.sm,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+          }}
+        >
+          Start Date
         </Text>
         <TextInput
           placeholder="YYYY-MM-DD"
-          value={date}
-          onChangeText={setDate}
+          value={startDate}
+          onChangeText={setStartDate}
           placeholderTextColor={colors.muted}
           editable={!loading}
           style={{
@@ -226,46 +220,12 @@ export default function EditActivity() {
             color: colors.text,
             fontSize: 15,
           }}
-          accessibilityLabel="Activity date"
+          accessibilityLabel="Start date"
         />
       </View>
 
-      {/* Duration */}
-      <View style={{ marginBottom: spacing.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: spacing.sm,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Duration (Hours)
-        </Text>
-        <TextInput
-          value={duration}
-          onChangeText={setDuration}
-          placeholderTextColor={colors.muted}
-          keyboardType="decimal-pad"
-          editable={!loading}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.card,
-            color: colors.text,
-            fontSize: 15,
-          }}
-          accessibilityLabel="Activity duration"
-        />
-      </View>
-
-      {/* Save Button - Main Action */}
       <Pressable
-        onPress={updateActivity}
+        onPress={handleSave}
         disabled={!isFormValid || loading}
         style={({ pressed }) => ({
           backgroundColor: isFormValid && !loading ? colors.primary : colors.border,
@@ -277,7 +237,7 @@ export default function EditActivity() {
           opacity: pressed && isFormValid && !loading ? 0.9 : 1,
         })}
         accessibilityRole="button"
-        accessibilityLabel="Update activity"
+        accessibilityLabel="Save changes"
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -295,7 +255,6 @@ export default function EditActivity() {
         )}
       </Pressable>
 
-      {/* Cancel Button - Secondary */}
       <Pressable
         onPress={() => router.back()}
         disabled={loading}
@@ -311,18 +270,13 @@ export default function EditActivity() {
         accessibilityRole="button"
         accessibilityLabel="Cancel"
       >
-        <Text
-          style={{
-            color: colors.text,
-            fontWeight: '600',
-            fontSize: 15,
-          }}
-        >
+        <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>
           Cancel
         </Text>
       </Pressable>
 
       <View style={{ height: spacing.lg }} />
     </ScrollView>
-  );
+  </>);
 }
+

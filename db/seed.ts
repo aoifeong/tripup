@@ -1,41 +1,62 @@
+import { hashPassword } from '@/utils/hash';
 import { db } from './client';
-import { activitiesTable, categoriesTable, targetsTable, tripsTable } from './schema';
+import { activitiesTable, categoriesTable, targetsTable, tripsTable, usersTable } from './schema';
 
+// runs once on first app launch to fill the db with demo data
+// bails out early if there's already stuff there so it dont dupe
 export async function seedDatabaseIfEmpty() {
   const existingTrips = await db.select().from(tripsTable);
   if (existingTrips.length > 0) return;
 
-  // Seed trips
+  // make the demo user first so it can grab the id for the trips below
+  // password is hashed before storing, never plaintext
+ const [demoUser] = await db
+  .insert(usersTable)
+  .values({
+    name: 'Demo User',
+    email: 'demo@example.com',
+    password: await hashPassword('demo123'),
+  })
+  .returning();
+
+  // trips belong to the demo user
   await db.insert(tripsTable).values([
-    {
-      title: 'Rome Getaway',
-      destination: 'Italy',
-      startDate: '2026-07-02',
-    },
-    {
-      title: 'Barcelona Holiday',
-      destination: 'Spain',
-      startDate: '2026-08-15',
-    },
-    {
-      title: 'Philippines',
-      destination: 'Manila',
-      startDate: '2026-09-06',
-    },
-  ]);
+  {
+    userId: demoUser.id,
+    title: 'Rome Getaway',
+    destination: 'Italy',
+    startDate: '2026-07-02',
+    endDate: '2026-07-09',
+  },
+  {
+    userId: demoUser.id,
+    title: 'Barcelona Holiday',
+    destination: 'Spain',
+    startDate: '2026-08-15',
+    endDate: '2026-08-22',
+  },
+  {
+    userId: demoUser.id,
+    title: 'Philippines',
+    destination: 'Manila',
+    startDate: '2026-09-06',
+    endDate: '2026-09-20',
+  },
+]);
 
   const trips = await db.select().from(tripsTable);
 
-  // Seed categories
+  // categories are global so every user can use them, no userId needed
   await db.insert(categoriesTable).values([
-    { name: 'Sightseeing', color: 'blue' },
-    { name: 'Food', color: 'orange' },
-    { name: 'Adventure', color: 'green' },
-    { name: 'Sports', color: 'purple' },
+    { name: 'Sightseeing', color: '#3b82f6' },
+    { name: 'Food', color: '#f97316' },
+    { name: 'Adventure', color: '#22c55e' },
+    { name: 'Sports', color: '#a855f7' },
   ]);
 
   const categories = await db.select().from(categoriesTable);
 
+  // grab each trip + category by name to link activities to them by id
   const romeTrip = trips.find((trip) => trip.title === 'Rome Getaway');
   const barcelonaTrip = trips.find((trip) => trip.title === 'Barcelona Holiday');
   const philippinesTrip = trips.find((trip) => trip.title === 'Philippines');
@@ -45,10 +66,11 @@ export async function seedDatabaseIfEmpty() {
   const adventure = categories.find((cat) => cat.name === 'Adventure');
   const sports = categories.find((cat) => cat.name === 'Sports');
 
+  // bail if anything's missing, dont crash on undefined ids
   if (!romeTrip || !barcelonaTrip || !philippinesTrip) return;
   if (!sightseeing || !food || !adventure || !sports) return;
 
-  // Seed activities
+  // activities for each trip
   await db.insert(activitiesTable).values([
     {
       tripId: romeTrip.id,
@@ -94,7 +116,7 @@ export async function seedDatabaseIfEmpty() {
     },
   ]);
 
-  // Seed targets
+  // one target per trip
   await db.insert(targetsTable).values([
     {
       tripId: romeTrip.id,

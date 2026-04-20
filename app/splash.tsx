@@ -1,13 +1,12 @@
-import { colors, spacing } from '@/constants/theme';
+import { getColors, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
+import { useContext } from 'react';
 import { ActivityIndicator, Image, Text, View } from 'react-native';
 
-/**
- * Splash Screen
- * 
- * Shown while the app initializes and loads data.
- * Displays the TripUp logo and branding.
- */
 export default function SplashScreen() {
+  const themeContext = useContext(ThemeContext);
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
+
   return (
     <View
       style={{
@@ -18,7 +17,6 @@ export default function SplashScreen() {
         paddingHorizontal: spacing.lg,
       }}
     >
-      {/* Logo */}
       <View style={{ marginBottom: 30 }}>
         <Image
           source={require('@/assets/images/tripuplogo.png')}
@@ -30,7 +28,6 @@ export default function SplashScreen() {
         />
       </View>
 
-      {/* App Name */}
       <Text
         style={{
           fontSize: 32,
@@ -43,7 +40,6 @@ export default function SplashScreen() {
         TripUp
       </Text>
 
-      {/* Tagline */}
       <Text
         style={{
           fontSize: 14,
@@ -56,10 +52,8 @@ export default function SplashScreen() {
         Plan. Organize. Explore.
       </Text>
 
-      {/* Loading Indicator */}
       <ActivityIndicator size="large" color={colors.primary} />
 
-      {/* Loading Text */}
       <Text
         style={{
           fontSize: 12,

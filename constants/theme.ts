@@ -1,4 +1,5 @@
-export const colors = {
+// Light Mode Colors
+export const lightColors = {
   background: '#f9fafb',
   card: '#ffffff',
   text: '#111827',
@@ -6,6 +7,22 @@ export const colors = {
   border: '#e5e7eb',
   primary: '#3b82f6',
   secondary: '#3b82f6',
+};
+
+// Dark Mode Colors
+export const darkColors = {
+  background: '#0f172a',
+  card: '#1e293b',
+  text: '#f1f5f9',
+  muted: '#94a3b8',
+  border: '#334155',
+  primary: '#60a5fa',
+  secondary: '#60a5fa',
+};
+
+// Get colors based on theme
+export const getColors = (isDarkMode: boolean) => {
+  return isDarkMode ? darkColors : lightColors;
 };
 
 export const spacing = {
@@ -17,5 +34,8 @@ export const spacing = {
 };
 
 export const radius = {
-  md: 8,  
+  md: 8,
 };
+
+// For backward compatibility - default to light mode
+export const colors = lightColors;

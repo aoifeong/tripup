@@ -1,16 +1,19 @@
 import { AuthContext, User } from '@/app/_layout';
-import { colors, radius, spacing } from '@/constants/theme';
+import { getColors, radius, spacing } from '@/constants/theme';
+import { ThemeContext } from '@/contexts/ThemeContext';
 import { db } from '@/db/client';
 import { usersTable } from '@/db/schema';
+import { hashPassword } from '@/utils/hash';
 import { eq } from 'drizzle-orm';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useContext, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 export default function LoginScreen() {
   const router = useRouter();
   const auth = useContext(AuthContext);
-
+  const themeContext = useContext(ThemeContext);
+  const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -50,8 +53,9 @@ export default function LoginScreen() {
       }
 
       const user = users[0];
+      const hashedInput = await hashPassword(password);
 
-      if (user.password !== password) {
+      if (user.password !== hashedInput) {
         setError('Email or password is incorrect');
         setLoading(false);
         return;
@@ -69,7 +73,10 @@ export default function LoginScreen() {
   const isFormValid = email.trim().length > 0 && password.length > 0;
 
   return (
+    <>
+    <Stack.Screen options={{ title: 'Login' }} />
     <ScrollView
+    style={{ backgroundColor: colors.background }}
       contentContainerStyle={{
         flex: 1,
         paddingHorizontal: spacing.lg,
@@ -295,5 +302,5 @@ export default function LoginScreen() {
         </Pressable>
       </View>
     </ScrollView>
-  );
+  </>);
 }

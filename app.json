@@ -8,11 +8,8 @@
     "scheme": "tripup",
     "userInterfaceStyle": "light", 
   
-    
-    // ADD THESE BRANDING FIELDS:
     "primaryColor": "#3b82f6",
     "backgroundColor": "#f9fafb",
-    
     
     "ios": {
       "supportsTablet": true
