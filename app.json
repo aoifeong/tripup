@@ -6,27 +6,21 @@
     "orientation": "portrait",
     "icon": "./assets/images/tripuplogo.png",
     "scheme": "tripup",
-    "userInterfaceStyle": "light", 
-  
+    "userInterfaceStyle": "light",
     "primaryColor": "#3b82f6",
     "backgroundColor": "#f9fafb",
-    
+    "platforms": ["ios", "android"],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#3b82f6",  
+        "backgroundColor": "#3b82f6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      
       "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -37,14 +31,26 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#f9fafb"
-          }
-
+        }
       ],
       "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1ddce750-8a53-48e9-b157-b0ff6b6c322f"
+      }
+    },
+    "owner": "aoife-ongs-mobile-dev-projs",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1ddce750-8a53-48e9-b157-b0ff6b6c322f"
     }
   }
 }
