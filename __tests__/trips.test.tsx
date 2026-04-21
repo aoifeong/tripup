@@ -5,8 +5,8 @@ jest.mock('../utils/hash', () => ({
   hashPassword: jest.fn().mockResolvedValue('hashed-password-123'),
 }));
 
-// in-memory fake "db" that remembers what gets inserted so we can read it back
-// this is the integration bit - seed writes, then we read back and check
+// in-memory fake "db" that remembers what gets inserted so can read it back
+// this is the integration bit- seed writes, read back and check
 const fakeDb: Record<string, any[]> = {
   users: [],
   trips: [],
@@ -36,7 +36,6 @@ jest.mock('../db/client', () => ({
         const startId = fakeDb[name].length + 1;
         const withIds = rowsArray.map((row, i) => ({ id: startId + i, ...row }));
         fakeDb[name].push(...withIds);
-        // chainable returning()
         return {
           returning: () => Promise.resolve(withIds),
         };
@@ -57,7 +56,7 @@ describe('Trips integration - seed to list flow', () => {
     // act: run the seed function
     await seedDatabaseIfEmpty();
 
-    // assert: the trips "list" (what a list screen would query) has the seeded trips
+    // assert the trips list (what a list screen would query) has the seeded trips
     expect(fakeDb.trips.length).toBe(3);
 
     const titles = fakeDb.trips.map((t) => t.title);

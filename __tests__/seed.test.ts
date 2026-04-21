@@ -1,11 +1,11 @@
 import { seedDatabaseIfEmpty } from '../db/seed';
 
-// mock the hash helper so we dont actually run crypto in tests
+// mock the hash helper so i dont actually run crypto in tests
 jest.mock('../utils/hash', () => ({
   hashPassword: jest.fn().mockResolvedValue('hashed-password-123'),
 }));
 
-// fake the db so we can track what gets called without touching sqlite
+// fake the db so i can track what gets called without touching sqlite
 // returning() gives us a fake inserted user with id=1 so the seed can use it
 const mockInsert: jest.Mock = jest.fn(() => ({
   values: jest.fn().mockReturnValue({
@@ -35,7 +35,7 @@ describe('seedDatabaseIfEmpty', () => {
       const name = table?.[Symbol.for('drizzle:Name')] ?? '';
       if (name === 'trips') {
         tripsQueryCount++;
-        // first call is the "is the db empty?" check - return empty so seed runs
+        // first call is the "is the db empty?" check, return empty so seed runs
         if (tripsQueryCount === 1) return Promise.resolve([]);
         // later calls (e.g. to find trips by title) get the seeded data
         return Promise.resolve([
@@ -72,7 +72,7 @@ describe('seedDatabaseIfEmpty', () => {
 
     await seedDatabaseIfEmpty();
 
-    // seed should bail out early - no inserts at all
+    // seed should bail out early- no inserts at all
     expect(mockInsert).not.toHaveBeenCalled();
   });
 });
