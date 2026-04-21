@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useContext } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+// formats a date into a short "Jul 2" style label for the trip list
 const formatDate = (dateStr: string) => {
   try {
     const date = new Date(dateStr);
@@ -14,12 +15,14 @@ const formatDate = (dateStr: string) => {
   }
 };
 
+// card that shows one trip in the trips list tap to navigate to its detail screen
 export default function TripCard({ trip }: { trip: Trip }) {
   const router = useRouter();
   const themeContext = useContext(ThemeContext);
 
   const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
 
+  // navigate into trip/[id]- expo-router handles the params from the path
   const handlePress = () => {
     router.push(`/trip/${trip.id}`);
   };
@@ -39,6 +42,7 @@ export default function TripCard({ trip }: { trip: Trip }) {
       accessibilityLabel={`Trip: ${trip.title}`}
       accessibilityHint={`Tap to view ${trip.title} details`}
     >
+      {/* trip title + destination */}
       <View style={{ marginBottom: spacing.md }}>
         <Text
           style={{
@@ -61,6 +65,7 @@ export default function TripCard({ trip }: { trip: Trip }) {
         </Text>
       </View>
 
+      {/* date range on the left, little arrow on the right to hint its tappable */}
       <View
         style={{
           flexDirection: 'row',

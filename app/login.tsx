@@ -9,6 +9,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useContext, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+// login screen- email + password with hashed password comparison
 export default function LoginScreen() {
   const router = useRouter();
   const auth = useContext(AuthContext);
@@ -28,7 +29,6 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Validation
       if (!email.trim()) {
         setError('Email is required');
         setLoading(false);
@@ -41,6 +41,7 @@ export default function LoginScreen() {
         return;
       }
 
+      // look up the user by email
       const users = await db
         .select()
         .from(usersTable)
@@ -53,6 +54,8 @@ export default function LoginScreen() {
       }
 
       const user = users[0];
+      // hash the input password and compare against the stored hash
+      // never compare plaintext- user.password is always a SHA-256 hash
       const hashedInput = await hashPassword(password);
 
       if (user.password !== hashedInput) {
@@ -61,6 +64,7 @@ export default function LoginScreen() {
         return;
       }
 
+      // set current user in context- this triggers _layout to show the logged-in screens
       setCurrentUser(user as User);
       setError('');
       router.replace('/');
@@ -108,7 +112,7 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* Error State */}
+        {/* red error banner, announced by screen readers */}
         {error ? (
           <View
             style={{
@@ -135,7 +139,6 @@ export default function LoginScreen() {
           </View>
         ) : null}
 
-        {/* Email Input */}
         <View style={{ marginBottom: spacing.lg }}>
           <Text
             style={{
@@ -159,6 +162,7 @@ export default function LoginScreen() {
             editable={!loading}
             style={{
               borderWidth: 1,
+              // red border if theres an error to draw attention to the inputs
               borderColor: error ? '#fca5a5' : colors.border,
               padding: spacing.md,
               borderRadius: radius.md,
@@ -171,7 +175,6 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Password Input */}
         <View style={{ marginBottom: spacing.lg }}>
           <Text
             style={{
@@ -190,6 +193,7 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             placeholderTextColor={colors.muted}
+            // secureTextEntry masks the input with dots
             secureTextEntry
             editable={!loading}
             style={{
@@ -206,7 +210,6 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Login Button - Main Action */}
         <Pressable
           onPress={handleLogin}
           disabled={!isFormValid || loading}
@@ -240,7 +243,7 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
-        {/* Divider */}
+        {}
         <View
           style={{
             flexDirection: 'row',
@@ -273,7 +276,6 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Register Link - Secondary Action */}
         <Pressable
           onPress={() => router.push('/register')}
           disabled={loading}

@@ -9,6 +9,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useContext, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+// register screen - creates a new user with a hashed password
 export default function RegisterScreen() {
   const router = useRouter();
   const auth = useContext(AuthContext);
@@ -25,6 +26,7 @@ export default function RegisterScreen() {
 
   const { setCurrentUser } = auth;
 
+  // basic password rules 
   const validatePassword = (pwd: string): string | null => {
     if (pwd.length < 6) return 'Password must be at least 6 characters';
     return null;
@@ -35,7 +37,6 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      // Validation
       if (!name.trim()) {
         setError('Name is required');
         setLoading(false);
@@ -61,7 +62,7 @@ export default function RegisterScreen() {
         return;
       }
 
-      // Check if email exists
+      // check if this email is already registered so no duplicates
       const existing = await db
         .select()
         .from(usersTable)
@@ -73,13 +74,14 @@ export default function RegisterScreen() {
         return;
       }
 
-      // Create user
+      // insert the user with the hashed password, not the plaintext one
       await db.insert(usersTable).values({
         name: name.trim(),
         email: email.trim(),
         password: await hashPassword(password),
       });
 
+      // grab the newly created user back out so sytem can sign them in immediately
       const createdUsers = await db
         .select()
         .from(usersTable)
@@ -96,6 +98,7 @@ export default function RegisterScreen() {
     }
   };
 
+  // form only submits when all fields are filled and passwords match
   const isFormValid =
     name.trim().length > 0 &&
     email.trim().length > 0 &&
@@ -136,7 +139,6 @@ export default function RegisterScreen() {
         </Text>
       </View>
 
-      {/* Error State */}
       {error ? (
         <View
           style={{
@@ -163,7 +165,6 @@ export default function RegisterScreen() {
         </View>
       ) : null}
 
-      {/* Name Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -198,7 +199,6 @@ export default function RegisterScreen() {
         />
       </View>
 
-      {/* Email Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -234,7 +234,6 @@ export default function RegisterScreen() {
         />
       </View>
 
-      {/* Password Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -267,6 +266,7 @@ export default function RegisterScreen() {
           accessibilityLabel="Password"
           accessibilityHint="Enter a password with at least 6 characters"
         />
+        {/* inline validation- shows as soon as user starts typing but its too short */}
         {password.length > 0 && password.length < 6 && (
           <Text
             style={{
@@ -280,7 +280,6 @@ export default function RegisterScreen() {
         )}
       </View>
 
-      {/* Confirm Password Input */}
       <View style={{ marginBottom: spacing.lg }}>
         <Text
           style={{
@@ -303,6 +302,7 @@ export default function RegisterScreen() {
           editable={!loading}
           style={{
             borderWidth: 1,
+            // red border when passwords dont match
             borderColor:
               confirmPassword && password !== confirmPassword
                 ? '#fca5a5'
@@ -329,7 +329,6 @@ export default function RegisterScreen() {
         )}
       </View>
 
-      {/* Register Button - Main Action */}
       <Pressable
         onPress={handleRegister}
         disabled={!isFormValid || loading}
@@ -362,7 +361,7 @@ export default function RegisterScreen() {
         )}
       </Pressable>
 
-      {/* Divider */}
+      {}
       <View
         style={{
           flexDirection: 'row',
@@ -395,7 +394,6 @@ export default function RegisterScreen() {
         />
       </View>
 
-      {/* Login Link - Secondary Action */}
       <Pressable
         onPress={() => router.push('/login')}
         disabled={loading}

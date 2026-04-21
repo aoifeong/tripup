@@ -3,6 +3,8 @@ import { ThemeContext } from '@/contexts/ThemeContext';
 import { useContext } from 'react';
 import { ActivityIndicator, Image, Text, View } from 'react-native';
 
+// custom splash screen shown while the db loads + seed runs on first launch
+// the real native splash is also hidden from _layout.tsx via SplashScreen.hideAsync()
 export default function SplashScreen() {
   const themeContext = useContext(ThemeContext);
   const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
@@ -17,6 +19,7 @@ export default function SplashScreen() {
         paddingHorizontal: spacing.lg,
       }}
     >
+      {/* Logo */}
       <View style={{ marginBottom: 30 }}>
         <Image
           source={require('@/assets/images/tripuplogo.png')}
@@ -28,18 +31,8 @@ export default function SplashScreen() {
         />
       </View>
 
-      <Text
-        style={{
-          fontSize: 32,
-          fontWeight: '700',
-          color: colors.text,
-          marginBottom: 8,
-          letterSpacing: 1,
-        }}
-      >
-        TripUp
-      </Text>
 
+      {/* tagline */}
       <Text
         style={{
           fontSize: 14,
@@ -49,9 +42,10 @@ export default function SplashScreen() {
           fontWeight: '500',
         }}
       >
-        Plan. Organize. Explore.
+        Plan. Organise. Discover.
       </Text>
 
+      {/* spinner while things load */}
       <ActivityIndicator size="large" color={colors.primary} />
 
       <Text

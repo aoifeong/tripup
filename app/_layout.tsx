@@ -8,8 +8,11 @@ import { Stack } from 'expo-router';
 import * as SplashScreenLib from 'expo-splash-screen';
 import { createContext, Dispatch, SetStateAction, useContext, useEffect, useState } from 'react';
 
+// keep the splash screen up until bootstrapping finishes, prevents a flash of empty content
 SplashScreenLib.preventAutoHideAsync();
 
+// shared Trip type- used everywhere a trip is passed around
+// endDate is nullable because not every trip has an end date set
 export type Trip = {
   id: number;
   userId: number;
@@ -19,6 +22,7 @@ export type Trip = {
   endDate: string | null;
 };
 
+// shared User type- password is stored hashed not plaintext
 export type User = {
   id: number;
   name: string;
@@ -26,6 +30,7 @@ export type User = {
   password: string;
 };
 
+// contexts for sharing state across the tree without prop drilling
 type TripContextType = {
   trips: Trip[];
   setTrips: Dispatch<SetStateAction<Trip[]>>;
@@ -39,6 +44,7 @@ type AuthContextType = {
 export const TripContext = createContext<TripContextType | null>(null);
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+// inner component so it can use ThemeContext (ThemeProvider wraps it below)
 function RootLayoutContent() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -47,20 +53,22 @@ function RootLayoutContent() {
 
   const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
 
+// runs on app start and whenever the logged-in user changes
+// seeds the db if empty, loads that user's trips, hides the splash screen
 useEffect(() => {
   const bootstrapAsync = async () => {
     try {
       await seedDatabaseIfEmpty();
-      
-      // Only load trips if user is logged in
+
+      // trips are scoped to the logged-in user, so only load when someone's signed in
       if (currentUser) {
         const tripRows = await db
           .select()
           .from(tripsTable)
-          .where(eq(tripsTable.userId, currentUser.id));  // ← Filter by user
+          .where(eq(tripsTable.userId, currentUser.id));
         setTrips(tripRows);
       } else {
-        setTrips([]); // Empty trips if no user logged in
+        setTrips([]);
       }
     } catch (e) {
       console.error('Failed to restore session:', e);
@@ -71,11 +79,13 @@ useEffect(() => {
   };
 
   bootstrapAsync();
-}, [currentUser]); // ← Also add currentUser to dependency array
+}, [currentUser]);
 
   return (
+    // auth + trip providers wrap the entire screen tree so any screen can read them
     <AuthContext.Provider value={{ currentUser, setCurrentUser }}>
       <TripContext.Provider value={{ trips, setTrips }}>
+        {/* shared Stack styling applied to every screen */}
         <Stack
   screenOptions={{
     headerStyle: {
@@ -90,11 +100,13 @@ useEffect(() => {
     headerShadowVisible: false,
   }}
 >
+  {/* conditional routing, logged in gets app screens, logged out gets auth screens */}
   {currentUser ? (
     <>
       <Stack.Screen
         name="(tabs)"
         options={{
+          // tabs layout handles its own header, so hide the parent stack's one
           headerShown: false,
         }}
       />
@@ -174,6 +186,7 @@ useEffect(() => {
       />
     </>
   ) : (
+    // signed out- only login and register are accessible
     <>
       <Stack.Screen
         name="login"
@@ -197,6 +210,7 @@ useEffect(() => {
   );
 }
 
+// root wraps everything in ThemeProvider so dark/light mode is available to the layout content
 export default function RootLayout() {
   return (
     <ThemeProvider>

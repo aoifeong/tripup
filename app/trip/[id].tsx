@@ -9,6 +9,7 @@ import { useContext, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { Trip, TripContext } from '../_layout';
 
+// single trip screen, shows destination, dates, weather, and links to activities/targets/insights
 export default function TripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -22,8 +23,10 @@ export default function TripDetail() {
 
   const { trips, setTrips } = context;
 
+  // find the trip from context by id
   const trip = trips.find((t: Trip) => t.id === Number(id));
 
+  // fallback screen if the trip doesnt exist
   if (!trip) {
     return (
       <>
@@ -42,6 +45,7 @@ export default function TripDetail() {
     );
   }
 
+  // confirmation dialog before deleting, then remove from db and refresh context
   const deleteTrip = async () => {
     Alert.alert('Delete Trip', 'Are you sure you want to delete this trip?', [
       {
@@ -68,6 +72,7 @@ export default function TripDetail() {
     ]);
   };
 
+  // formats a YYYY-MM-DD date string into something like "Thu, July 2, 2026"
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -78,18 +83,20 @@ export default function TripDetail() {
     });
   };
 
+  // figures out what duration label to show
+  // if there's an endDate: total trip length in days
+  // if no endDate: relative time like "Starts in 3 days" or "Started 2 days ago"
   const getTripDuration = (startDate: string, endDate: string | null): string => {
     const start = new Date(startDate);
     const now = new Date();
 
-    // If there's an end date, calculate trip length
     if (endDate) {
       const end = new Date(endDate);
+      // +1 so a trip from jul 2 to jul 9 shows as 8 days instead of 7
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       return `${days} day${days !== 1 ? 's' : ''}`;
     }
 
-    // No end date: show "starts in X days" or "started X days ago"
     const diffMs = start.getTime() - now.getTime();
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -102,6 +109,7 @@ export default function TripDetail() {
 
   return (
     <>
+      {/* header shows the trip's actual title, not a generic one */}
       <Stack.Screen options={{ title: trip.title }} />
       <ScrollView
         style={{ backgroundColor: colors.background }}
@@ -112,7 +120,7 @@ export default function TripDetail() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Trip Info Card */}
+        {/* main info card; destination, title, dates, duration, status */}
         <View
           style={{
             borderWidth: 1,
@@ -172,7 +180,7 @@ export default function TripDetail() {
             }}
           />
 
-          {/* Quick Stats */}
+          {/* duration + status side by side */}
           <View style={{ flexDirection: 'row', gap: spacing.lg }}>
             <View>
               <Text
@@ -220,10 +228,10 @@ export default function TripDetail() {
           </View>
         </View>
 
-        {/* Weather Widget */}
+        {/* external weather api component - fetches live weather for the destination */}
         <WeatherWidget destination={trip.destination} />
 
-        {/* Main Action - View Activities */}
+        {/* main CTA - go to the activities list for this trip */}
         <Pressable
           onPress={() =>
             router.push({
@@ -256,7 +264,7 @@ export default function TripDetail() {
           </Text>
         </Pressable>
 
-        {/* Secondary Navigation - 3 Column Grid */}
+        {/* three-icon grid for secondary nav - targets, insights, categories */}
         <View style={{ marginBottom: spacing.lg }}>
           <Text
             style={{
@@ -350,7 +358,7 @@ export default function TripDetail() {
               </Text>
             </Pressable>
 
-            {/* Categories */}
+            {/* Categories; not trip-specific but linked here for convenience */}
             <Pressable
               onPress={() => router.push('/categories')}
               disabled={loading}
@@ -392,7 +400,7 @@ export default function TripDetail() {
           }}
         />
 
-        {/* Edit Button - Secondary Action */}
+        {/* edit button, secondary styling so it doesnt compete with the main CTA above */}
         <Pressable
           onPress={() =>
             router.push({
@@ -420,7 +428,7 @@ export default function TripDetail() {
           </Text>
         </Pressable>
 
-        {/* Delete Button - Destructive Action */}
+        {/* red to signal this isnt reversible */}
         <Pressable
           onPress={deleteTrip}
           disabled={loading}

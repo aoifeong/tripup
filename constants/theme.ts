@@ -1,4 +1,4 @@
-// Light Mode Colors
+// Light Mode Colours
 export const lightColors = {
   background: '#f9fafb',
   card: '#ffffff',
@@ -9,7 +9,7 @@ export const lightColors = {
   secondary: '#3b82f6',
 };
 
-// Dark Mode Colors
+// Dark Mode Colours
 export const darkColors = {
   background: '#0f172a',
   card: '#1e293b',
@@ -20,7 +20,6 @@ export const darkColors = {
   secondary: '#60a5fa',
 };
 
-// Get colors based on theme
 export const getColors = (isDarkMode: boolean) => {
   return isDarkMode ? darkColors : lightColors;
 };
@@ -37,5 +36,5 @@ export const radius = {
   md: 8,
 };
 
-// For backward compatibility - default to light mode
+// For backward compatibility- default to light mode
 export const colors = lightColors;

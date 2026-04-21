@@ -8,6 +8,8 @@ type WeatherWidgetProps = {
   destination: string;
 };
 
+// weather widget- calls the openweathermap api and shows current conditions for the trip destination
+// handles all three states: loading, error, success
 export default function WeatherWidget({ destination }: WeatherWidgetProps) {
   const themeContext = useContext(ThemeContext);
   const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
@@ -16,6 +18,7 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // refetch whenever the destination prop changes
   useEffect(() => {
     const loadWeather = async () => {
       setLoading(true);
@@ -24,6 +27,7 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
         const data = await fetchWeather(destination);
         setWeather(data);
       } catch (err) {
+        // pull the error message out safely whether it's an Error or something else
         const message = err instanceof Error ? err.message : 'Failed to load weather';
         setError(message);
       } finally {
@@ -34,6 +38,7 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
     loadWeather();
   }, [destination]);
 
+  // loading state- spinner while fetching
   if (loading) {
     return (
       <View
@@ -62,6 +67,7 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
     );
   }
 
+  // error state- typically if the destination isnt recognised by the api
   if (error) {
     return (
       <View
@@ -82,16 +88,18 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
             lineHeight: 18,
           }}
         >
-          ⚠️ {error}
+          {error}
         </Text>
       </View>
     );
   }
 
+  // if somehow no weather and no error, render nothing
   if (!weather) {
     return null;
   }
 
+  // map the api's icon code to a matching emoji
   const emoji = getWeatherEmoji(weather.icon);
 
   return (
@@ -118,7 +126,7 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
          Weather
       </Text>
 
-      {/* Main Weather Display */}
+      {/* big temperature on the left, weather emoji on the right */}
       <View
         style={{
           flexDirection: 'row',
@@ -176,14 +184,13 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
         }}
       />
 
-      {/* Additional Details */}
+      {/* three-column row of extra stats- humidity, wind, city name */}
       <View
         style={{
           flexDirection: 'row',
           justifyContent: 'space-around',
         }}
       >
-        {/* Humidity */}
         <View style={{ alignItems: 'center' }}>
           <Text
             style={{
@@ -206,7 +213,6 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
           </Text>
         </View>
 
-        {/* Wind Speed */}
         <View style={{ alignItems: 'center' }}>
           <Text
             style={{
@@ -229,7 +235,6 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
           </Text>
         </View>
 
-        {/* Location */}
         <View style={{ alignItems: 'center' }}>
           <Text
             style={{
@@ -253,7 +258,6 @@ export default function WeatherWidget({ destination }: WeatherWidgetProps) {
         </View>
       </View>
 
-      {/* Disclaimer */}
       <Text
         style={{
           fontSize: 10,

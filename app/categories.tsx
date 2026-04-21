@@ -13,11 +13,14 @@ type Category = {
   color: string;
 };
 
+// preset colour options for the colour picker. named colours get mapped to hex below
 const COLOR_PALETTE = [
   'red', 'orange', 'amber', 'lime', 'green',
   'teal', 'blue', 'indigo', 'purple', 'pink'
 ];
 
+// global categories screen- create and delete categories
+// categories are shared across all users and all trips
 export default function CategoriesScreen() {
   const themeContext = useContext(ThemeContext);
   const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
@@ -35,6 +38,7 @@ export default function CategoriesScreen() {
     loadCategories();
   }, []);
 
+  // insert a new category, reset the form, reload the list
   const addCategory = async () => {
     if (!name.trim()) return;
 
@@ -48,11 +52,14 @@ export default function CategoriesScreen() {
     loadCategories();
   };
 
+  // remove from db then reload
   const deleteCategory = async (id: number) => {
     await db.delete(categoriesTable).where(eq(categoriesTable.id, id));
     loadCategories();
   };
 
+  // converts the saved colour name like blue to a hex value for rendering
+  // fallback to blue if somehow an unknown color gets through
   const getColorHex = (colorName: string): string => {
     const colorMap: Record<string, string> = {
       red: '#ef4444',
@@ -99,11 +106,11 @@ export default function CategoriesScreen() {
               color: colors.muted,
             }}
           >
-            Organize your activities
+            Organise your activities
           </Text>
         </View>
 
-        {/* Create Category Form */}
+        {/* create form- name input + colour picker + add button */}
         <View
           style={{
             borderWidth: 1,
@@ -125,7 +132,6 @@ export default function CategoriesScreen() {
             Create New Category
           </Text>
 
-          {/* Name Input */}
           <TextInput
             placeholder="Category name"
             value={name}
@@ -144,7 +150,7 @@ export default function CategoriesScreen() {
             accessibilityLabel="Category name input"
           />
 
-          {/* Color Picker */}
+          {/* colour swatches- selected one gets a border to show it's active */}
           <Text
             style={{
               fontSize: 12,
@@ -154,7 +160,7 @@ export default function CategoriesScreen() {
               textTransform: 'uppercase',
             }}
           >
-            Select Color
+            Select Colour
           </Text>
           <View
             style={{
@@ -173,6 +179,7 @@ export default function CategoriesScreen() {
                   height: 40,
                   borderRadius: 4,
                   backgroundColor: getColorHex(colorName),
+                  // only the selected swatch shows a border
                   borderWidth: selectedColor === colorName ? 2 : 0,
                   borderColor: colors.text,
                 }}
@@ -183,7 +190,7 @@ export default function CategoriesScreen() {
             ))}
           </View>
 
-          {/* Add Button */}
+          {/* button disabled until name is filled in */}
           <Pressable
             onPress={addCategory}
             disabled={!name.trim()}
@@ -209,7 +216,7 @@ export default function CategoriesScreen() {
           </Pressable>
         </View>
 
-        {/* Categories List */}
+        {/* list of existing categories with delete buttons */}
         {categories.length > 0 && (
           <View>
             <Text
@@ -238,6 +245,7 @@ export default function CategoriesScreen() {
                   backgroundColor: colors.card,
                 }}
               >
+                {/* colour preview square- accessible={false} so screen reader skips it */}
                 <View
                   style={{
                     width: 20,
@@ -285,6 +293,7 @@ export default function CategoriesScreen() {
           </View>
         )}
 
+        {/* empty state if theres no categories yet */}
         {categories.length === 0 && (
           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
             <Text
@@ -304,7 +313,7 @@ export default function CategoriesScreen() {
                 textAlign: 'center',
               }}
             >
-              Create your first category to organize activities
+              Create your first category to organise activities
             </Text>
           </View>
         )}

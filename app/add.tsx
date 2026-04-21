@@ -8,12 +8,14 @@ import { Stack, useRouter } from 'expo-router';
 import { useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+// form for creating a new trip for the logged-in user
 export default function AddTripScreen() {
   const context = useContext(TripContext);
   const authContext = useContext(AuthContext);
   const themeContext = useContext(ThemeContext);
   const router = useRouter();
 
+  // hooks to be declared before any early return bc react complain about hook order
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -24,6 +26,7 @@ export default function AddTripScreen() {
   const colors = themeContext ? getColors(themeContext.isDarkMode) : getColors(false);
   const currentUser = authContext?.currentUser ?? null;
 
+  // if  this screen is reached without a logged-in user, bounce them to login
   useEffect(() => {
     if (!currentUser) {
       router.replace('/login');
@@ -35,6 +38,7 @@ export default function AddTripScreen() {
 
   const { setTrips } = context;
 
+  // make sure the date is formatted as YYYY-MM-DD and is a real date
   const validateDate = (dateStr: string): boolean => {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateStr)) return false;
@@ -42,6 +46,8 @@ export default function AddTripScreen() {
     return date instanceof Date && !isNaN(date.getTime());
   };
 
+  // validate all the fields then insert into the db
+  // also refreshes the trips context so the trips list shows the new one immediately
   const handleAddTrip = async () => {
     setError('');
     setLoading(true);
@@ -71,7 +77,7 @@ export default function AddTripScreen() {
         return;
       }
 
-      // End date is optional, but if provided it must be valid AND after start date
+      // end date is optional only validate if something was entered
       if (endDate.trim()) {
         if (!validateDate(endDate)) {
           setError('Invalid end date format. Use YYYY-MM-DD');
@@ -85,14 +91,17 @@ export default function AddTripScreen() {
         }
       }
 
+      // insert the new trip linked to the current user
       await db.insert(tripsTable).values({
         userId: currentUser.id,
         title: title.trim(),
         destination: destination.trim(),
         startDate,
+        // empty string becomes null so the column is properly blank
         endDate: endDate.trim() || null,
       });
 
+      // refresh trip list from db so the new one shows up in the home screen
       const tripRows = await db
         .select()
         .from(tripsTable)
@@ -106,6 +115,7 @@ export default function AddTripScreen() {
     }
   };
 
+  // disables the save button until all required fields have something in them
   const isFormValid =
     title.trim().length > 0 && destination.trim().length > 0 && startDate.trim().length > 0;
 
@@ -133,10 +143,11 @@ export default function AddTripScreen() {
             Plan New Trip
           </Text>
           <Text style={{ fontSize: 14, color: colors.muted }}>
-            Create a new trip to organize your adventures
+            Create a new trip to organise your adventures
           </Text>
         </View>
 
+        {/* red error banner*/}
         {error ? (
           <View
             style={{
@@ -254,6 +265,7 @@ export default function AddTripScreen() {
           />
         </View>
 
+        {/* end date is optional- user can leave it blank for trips without a fixed end */}
         <View style={{ marginBottom: spacing.lg }}>
           <Text
             style={{

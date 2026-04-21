@@ -1,3 +1,6 @@
+// weather service- wraps the openweathermap api
+// api key comes from .env.local (EXPO_PUBLIC_WEATHER_API_KEY) so its not committed to git
+
 export type WeatherData = {
   temp: number;
   feelsLike: number;
@@ -14,8 +17,12 @@ export type WeatherError = {
   code?: string;
 };
 
+// EXPO_PUBLIC_ prefix means this gets bundled into the app at build time
+// the actual value is in .env.local which is gitignored
 const API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
 
+// fetches current weather for a destination name. returns null if no api key is set,
+// throws a friendly error if the location isnt found
 export const fetchWeather = async (
   destination: string
 ): Promise<WeatherData | null> => {
@@ -25,6 +32,8 @@ export const fetchWeather = async (
   }
 
   try {
+    // encodeURIComponent handles spaces/special chars in destination names 
+    // units=metric gives me celsius + m/s instead of fahrenheit + mph
     const response = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(
         destination
@@ -32,6 +41,7 @@ export const fetchWeather = async (
     );
 
     if (!response.ok) {
+      // 404 means the location name wasnt recognised
       if (response.status === 404) {
         throw new Error(`Location "${destination}" not found`);
       }
@@ -40,6 +50,7 @@ export const fetchWeather = async (
 
     const data = await response.json();
 
+    // rounds temps to whole numbers, wind to 1 decimal place
     return {
       temp: Math.round(data.main.temp),
       feelsLike: Math.round(data.main.feels_like),
@@ -57,26 +68,28 @@ export const fetchWeather = async (
   }
 };
 
+// maps openweather's icon codes to emojis
+// falls back to a generic emoji if the icon code isnt recognised
 export const getWeatherEmoji = (icon: string): string => {
   const iconMap: Record<string, string> = {
-    '01d': '☀️',  // clear sky day
-    '01n': '🌙',  // clear sky night
-    '02d': '⛅',  // few clouds day
-    '02n': '☁️',  // few clouds night
-    '03d': '☁️',  // scattered clouds day
-    '03n': '☁️',  // scattered clouds night
-    '04d': '☁️',  // broken clouds day
-    '04n': '☁️',  // broken clouds night
-    '09d': '🌧️',  // shower rain day
-    '09n': '🌧️',  // shower rain night
-    '10d': '🌦️',  // rain day
-    '10n': '🌧️',  // rain night
-    '11d': '⛈️',  // thunderstorm day
-    '11n': '⛈️',  // thunderstorm night
-    '13d': '❄️',  // snow day
-    '13n': '❄️',  // snow night
-    '50d': '🌫️',  // mist day
-    '50n': '🌫️',  // mist night
+    '01d': '☀️',
+    '01n': '🌙',
+    '02d': '⛅',
+    '02n': '☁️',
+    '03d': '☁️',
+    '03n': '☁️',
+    '04d': '☁️',
+    '04n': '☁️',
+    '09d': '🌧️',
+    '09n': '🌧️',
+    '10d': '🌦️',
+    '10n': '🌧️',
+    '11d': '⛈️',
+    '11n': '⛈️',
+    '13d': '❄️',
+    '13n': '❄️',
+    '50d': '🌫️',
+    '50n': '🌫️',
   };
 
   return iconMap[icon] || '🌤️';
