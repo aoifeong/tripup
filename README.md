@@ -7,7 +7,7 @@ GitHub Repository
 https://github.com/aoifeong/tripup
 
 Expo Preview Link (runs in Expo Go)
-https://expo.dev/preview/update?message=final+submission&updateRuntimeVersion=1.0.0&createdAt=2026-04-21T20%3A13%3A23.200Z&slug=exp&projectId=1ddce750-8a53-48e9-b157-b0ff6b6c322f&group=8e92e2b8-cc2b-4701-83d1-fdedb8760a8f
+https://expo.dev/preview/update?message=final+submission+v2&updateRuntimeVersion=1.0.0&createdAt=2026-04-23T16%3A58%3A17.111Z&slug=exp&projectId=1ddce750-8a53-48e9-b157-b0ff6b6c322f&group=352dec45-965a-4494-81ec-f66866933336
 
 See qr-code.png in this folder for a scannable QR code.
 
